@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Moderated regression</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600&family=Spectral:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js"></script>
+<style>
+:root{
+  --bg:#E8ECF0; --panel:#F7F9FB; --ink:#16202A; --muted:#5A6775; --rule:#C8D0D8; --soft:#DDE3E9;
+  --x1:#11797A; --x2:#A8720A; --y:#4343A6; --xz:#9A3B7A; --bad:#B3261E;
+  --sans:"Public Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --serif:"Spectral", Georgia, "Times New Roman", serif;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#11161C; --panel:#19212A; --ink:#E3E8ED; --muted:#96A3B0; --rule:#2E3946; --soft:#232C36;
+    --x1:#4DC3C3; --x2:#E2AF40; --y:#9C9CF2; --xz:#E58CC8; --bad:#FF8A80;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#11161C; --panel:#19212A; --ink:#E3E8ED; --muted:#96A3B0; --rule:#2E3946; --soft:#232C36;
+  --x1:#4DC3C3; --x2:#E2AF40; --y:#9C9CF2; --xz:#E58CC8; --bad:#FF8A80;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);font-variant-numeric:tabular-nums}
+.wrap{max-width:1380px;margin:0 auto;padding:20px 20px 48px}
+header{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 24px;margin-bottom:14px}
+h1{font:600 clamp(24px,3vw,34px)/1.15 var(--serif);margin:0;letter-spacing:-.01em}
+header p{margin:0;color:var(--muted);max-width:70ch}
+h2{font:600 19px/1.3 var(--serif);margin:0 0 10px}
+h3{font:600 14px/1.3 var(--sans);margin:0 0 8px;color:var(--muted)}
+.sectionhead{font:600 24px/1.2 var(--serif);margin:26px 0 4px}
+.sectionlede{color:var(--muted);margin:0 0 4px;max-width:90ch}
+/* stage switch */
+.stages{display:flex;flex-wrap:wrap;gap:10px;margin:0 0 8px}
+.stagebtn{flex:1 1 280px;text-align:left;font:600 16px/1.3 var(--serif);color:var(--ink);background:var(--panel);border:1px solid var(--rule);border-radius:10px;padding:10px 14px;cursor:pointer}
+.stagebtn .num{display:block;font:600 12px var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:2px}
+.stagebtn:hover{border-color:var(--muted)}
+.stagebtn[aria-pressed="true"]{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+.stagebtn[aria-pressed="true"] .num{color:color-mix(in srgb,var(--panel) 70%,transparent)}
+.stageintro{margin:0 0 16px;color:var(--muted);max-width:100ch}
+body[data-stage="1"] .s2only{display:none!important}
+body[data-stage="2"] .s1only{display:none!important}
+.grid{display:grid;grid-template-columns:340px minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:900px){.grid{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--rule);border-radius:10px;padding:16px;min-width:0}
+.controls{display:flex;flex-direction:column;gap:14px}
+.var{border-left:4px solid var(--c);padding:2px 0 4px 12px}
+.var + .var{margin-top:14px}
+.var .role{display:block;font-size:12.5px;color:var(--muted);margin-bottom:3px}
+.var input.name{font:600 16px var(--serif);color:var(--c);background:var(--bg);border:1px solid var(--rule);border-radius:6px;padding:4px 8px;width:100%;margin-bottom:8px}
+.var input.name:focus{outline:2px solid var(--c);outline-offset:0;border-color:var(--c)}
+.row{display:grid;grid-template-columns:62px 1fr 74px;align-items:center;gap:8px;margin:4px 0}
+.row label{font-size:13px;color:var(--muted)}
+input[type=number]{width:100%;font:inherit;font-size:14px;color:var(--ink);background:var(--bg);border:1px solid var(--rule);border-radius:6px;padding:3px 6px;text-align:right}
+input[type=range]{width:100%;accent-color:var(--c,var(--ink));margin:0}
+:focus-visible{outline:2px solid var(--y);outline-offset:2px}
+.matrix{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;margin-bottom:12px}
+.cell{padding:8px 4px;text-align:center;border-radius:6px;font-size:14px;border:0;font-family:inherit;color:var(--ink)}
+.cell.diag{background:transparent;font-weight:600;font-family:var(--serif);font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+button.cell{cursor:pointer}
+.corr{position:relative;margin:12px 0 6px}
+.corr .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:4px}
+.corr .top span{font-size:13px}
+.corr .top input{width:78px;flex:none}
+.track{position:relative;height:22px;--tc:var(--y)}
+.track .rail{position:absolute;left:0;right:0;top:9px;height:4px;border-radius:2px;background:var(--soft)}
+.track .band{position:absolute;top:7px;height:8px;border-radius:4px;background:color-mix(in srgb,var(--tc) 30%,transparent)}
+.track .zero{position:absolute;left:50%;top:4px;width:1px;height:14px;background:var(--rule)}
+.track input{position:absolute;inset:0;background:transparent;-webkit-appearance:none;appearance:none}
+.track input::-webkit-slider-runnable-track{background:transparent;height:22px}
+.track input::-moz-range-track{background:transparent}
+.track input::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--tc);border:2px solid var(--panel);margin-top:3px}
+.track input::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--tc);border:2px solid var(--panel)}
+.hint{font-size:12.5px;color:var(--muted);margin:2px 0 0}
+.flash{color:var(--bad)}
+.toggles{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:6px;font-size:14px}
+.toggles label{display:flex;gap:6px;align-items:center;cursor:pointer}
+button.btn{font:500 13.5px var(--sans);color:var(--ink);background:var(--bg);border:1px solid var(--rule);border-radius:6px;padding:6px 10px;cursor:pointer}
+button.btn:hover{border-color:var(--muted)}
+button.btn[aria-pressed="true"]{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+button.btn:disabled{opacity:.55;cursor:default}
+.popbox{margin-top:10px;padding:8px 10px;background:var(--bg);border-radius:6px;font-size:13px;color:var(--muted)}
+.popbox b{color:var(--ink);font-weight:600}
+/* plots */
+.plots{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,430px),1fr));gap:18px}
+.plots > div{min-width:0}
+#plot3,#plot2{width:100%;height:clamp(360px,56vh,560px)}
+#plotJN,#plotInt{width:100%;height:330px}
+#plotInt{height:380px}
+.plothead{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin-bottom:4px}
+.linekey{font-size:13px;color:var(--muted);margin:6px 0 0;max-width:80ch}
+.views{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.eq{font:500 16px/1.7 var(--serif);margin:16px 0 0;padding-top:12px;border-top:1px solid var(--soft);overflow-x:auto}
+.eq > div{white-space:nowrap}
+.eq .eqnote{font:14px/1.5 var(--sans);color:var(--muted);white-space:normal;max-width:84ch;margin:0 0 10px 118px}
+@media (max-width:600px){.eq .eqnote{margin-left:0}}
+.eq .hat{position:relative;display:inline-block}
+.eq .hat::after{content:"\02C6";position:absolute;left:calc(50% + .1em);top:-.32em;transform:translateX(-50%);font-style:normal;line-height:1;pointer-events:none}
+.eq .lab{font:13px var(--sans);color:var(--muted);display:inline-block;width:118px}
+/* output */
+.out{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,460px),1fr));gap:18px;margin-top:18px}
+.wide{grid-column:1/-1}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:6px 8px;text-align:right;white-space:nowrap}
+th{font-weight:600;color:var(--muted);font-size:12.5px;border-bottom:1px solid var(--rule)}
+th:first-child,td:first-child{text-align:left}
+tbody tr + tr td{border-top:1px solid var(--soft)}
+tr.grp td{font-weight:600;color:var(--muted);font-size:12.5px;padding-top:12px}
+td.v1{color:var(--x1);font-weight:600} td.v2{color:var(--x2);font-weight:600} td.vy{color:var(--y);font-weight:600} td.vz{color:var(--xz);font-weight:600}
+.note{font-size:13.5px;color:var(--muted);margin:10px 0 0}
+.note b{color:var(--ink);font-weight:600}
+.defs{margin:14px 0 0;font-size:13.5px;line-height:1.5;color:var(--muted)}
+.defs dt{font-weight:600;color:var(--ink);margin-top:8px}
+.defs dd{margin:2px 0 0}
+.prose{font-size:14px;margin:0 0 8px}
+.prose:last-child{margin-bottom:0}
+.notice{margin:12px 0 0;padding:0;list-style:none;font-size:14px}
+.notice li{padding:6px 0 6px 12px;border-left:3px solid var(--y);margin-bottom:8px}
+.notice li b{font-weight:600}
+.callout{margin:12px 0 0;padding:8px 12px;background:var(--bg);border-left:3px solid var(--y);border-radius:0 6px 6px 0;font-size:14px}
+.callout.hi{border-left-color:var(--bad)}
+.sig{color:var(--y);font-weight:600}
+.refs{font-size:13px;color:var(--muted);margin:0;padding-left:1.4em;text-indent:-1.4em;list-style:none}
+.refs li{margin-bottom:4px}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body data-stage="1">
+<div class="wrap">
+<header>
+  <h1>Moderated regression</h1>
+  <p>Start with a model in which the effect of one predictor is the same at every level of the other. Then switch to step 2 and let the effect of <span class="nm0"></span> depend on <span class="nm1"></span>. Every plot, coefficient and test updates as you move the sliders.</p>
+</header>
+
+<nav class="stages" aria-label="Steps">
+  <button class="stagebtn" id="st1" aria-pressed="true"><span class="num">Step 1</span>No interaction</button>
+  <button class="stagebtn" id="st2" aria-pressed="false"><span class="num">Step 2</span>The effect of <span class="nm0"></span> depends on <span class="nm1"></span></button>
+</nav>
+<p class="stageintro" id="stageIntro"></p>
+
+<div class="grid">
+  <aside class="controls">
+    <section class="panel">
+      <h2>Variables</h2>
+      <p class="hint" style="margin:-4px 0 12px">Type a label for each variable. It is used on the plot axes, sliders, tables and equations.</p>
+      <div id="vars"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Correlations</h2>
+      <div class="matrix" id="matrix" aria-label="Correlation matrix"></div>
+      <div id="corrs"></div>
+      <p class="hint">The shaded band on each slider is the range that keeps the three correlations mutually possible, given the other two.</p>
+    </section>
+
+    <section class="panel s2only" id="intPanel">
+      <h2>Interaction</h2>
+      <div class="corr" style="margin-top:0">
+        <div class="top"><span id="lab_b3">β<sub>3</sub>: change in the standardized <b class="nm0" style="color:var(--x1)"></b>–<b class="nm2" style="color:var(--y)"></b> slope per SD of <b class="nm1" style="color:var(--x2)"></b></span><input type="number" id="b3N" min="-0.8" max="0.8" step="0.01" aria-label="interaction value"></div>
+        <div class="track" style="--tc:var(--xz)"><div class="rail"></div><div class="zero"></div><div class="band" id="band_b3"></div>
+        <input type="range" id="b3R" min="-0.8" max="0.8" step="0.01" aria-labelledby="lab_b3"></div>
+        <p class="hint" id="warn_b3" aria-live="polite"></p>
+      </div>
+      <p class="hint">At 0 the effect of <span class="nm0"></span> is the same at every level of <span class="nm1"></span>. The shaded band shows the values that are possible given the correlations: the interaction cannot explain more variance in <span class="nm2"></span> than <span class="nm0"></span> and <span class="nm1"></span> leave unexplained.</p>
+      <div class="popbox" id="popBox"></div>
+      <div class="toggles" style="margin-top:12px">
+        <label title="Subtract each predictor's sample mean before forming the product"><input type="checkbox" id="center" checked> Center <span class="nm0"></span> and <span class="nm1"></span> before forming the product</label>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Sample</h2>
+      <div class="row" style="--c:var(--ink)">
+        <label for="nR">Size (n)</label>
+        <input type="range" id="nR" min="20" max="2000" step="10">
+        <input type="number" id="nN" min="10" max="5000" step="1">
+      </div>
+      <div class="toggles">
+        <label title="Force the sample means, SDs, predictor correlation and regression weights to match the population exactly"><input type="checkbox" id="exact"> Sample matches settings exactly</label>
+      </div>
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" id="resample">Draw a new sample</button>
+      </div>
+      <p class="hint" id="sampleHint"></p>
+    </section>
+  </aside>
+
+  <main>
+    <section class="panel">
+      <div class="plots">
+        <div>
+          <h3>3D view: <span class="nm2"></span> on <span class="nm0"></span> and <span class="nm1"></span></h3>
+          <div class="toggles" style="margin:0 0 4px">
+            <label><input type="checkbox" id="showSurf" checked> Fitted surface</label>
+            <label><input type="checkbox" id="showLines" checked> Lines at 3 levels of <span class="nm1"></span></label>
+            <label class="s2only"><input type="checkbox" id="showAdd"> Additive model (step 1)</label>
+            <label><input type="checkbox" id="ortho"> Orthographic</label>
+          </div>
+          <div id="plot3"></div>
+          <div class="views" role="group" aria-label="Camera">
+            <button class="btn" data-view="default">Angled view</button>
+            <button class="btn" data-view="x1">Look at <span class="nm0"></span> vs <span class="nm2"></span></button>
+            <button class="btn" data-view="x2">Look at <span class="nm1"></span> vs <span class="nm2"></span></button>
+            <button class="btn" data-view="top">Look down</button>
+            <button class="btn" id="spin" aria-pressed="false">Spin</button>
+          </div>
+        </div>
+        <div>
+          <h3><span class="nm2"></span> on <span class="nm0"></span> at three levels of <span class="nm1"></span></h3>
+          <div id="plot2"></div>
+          <p class="linekey" id="key2"></p>
+        </div>
+      </div>
+      <div class="eq s1only" id="eq"></div>
+    </section>
+
+    <!-- ===== STEP 1 OUTPUT ===== -->
+    <div class="out s1only">
+      <section class="panel">
+        <h2>Unstandardized coefficients</h2>
+        <div class="tbl"><table id="tU"></table></div>
+        <p class="note" id="noteU"></p>
+      </section>
+      <section class="panel">
+        <h2>Standardized coefficients</h2>
+        <div class="tbl"><table id="tS"></table></div>
+        <p class="note">sr is the semipartial correlation (sr² = unique share of variance in <span class="nm2"></span>).</p>
+      </section>
+      <section class="panel">
+        <h2>Model fit</h2>
+        <div class="tbl"><table id="tM"></table></div>
+      </section>
+      <section class="panel">
+        <h2>What “no interaction” means</h2>
+        <p class="prose">The right-hand plot shows the predicted value of <span class="nm2"></span> across <span class="nm0"></span> for cases at three levels of <span class="nm1"></span>: one SD below its mean, at its mean, and one SD above. The lines are parallel because the model gives the <span class="nm0"></span>–<span class="nm2"></span> relationship a single slope, <i>b</i><sub>1</sub> = <span id="b1txt"></span>, whatever the value of <span class="nm1"></span>. Changing <span class="nm1"></span> moves the line up or down by <i>b</i><sub>2</sub> per point; it never changes the line's slope.</p>
+        <p class="prose">In the 3D plot, the same three lines lie on the flat regression plane. Any slice through a flat plane at a fixed value of <span class="nm1"></span> has the same slope, so a flat plane can produce only parallel lines.</p>
+        <p class="callout">Parallel lines are an assumption of this model, not a finding. The additive model forces the lines to be parallel whether or not they are parallel in the population. Testing that assumption requires the product term <span class="nm0"></span>×<span class="nm1"></span>, which is what step 2 adds.</p>
+      </section>
+    </div>
+
+    <!-- ===== STEP 2 OUTPUT ===== -->
+    <div class="s2only">
+      <h2 class="sectionhead">Moderated regression analysis</h2>
+      <p class="sectionlede">The step 1 model is <i>additive</i>. Each predictor contributes its own weighted amount to the predicted value of <span class="nm2"></span>, and the contributions are simply added together, so the <span class="nm0"></span>–<span class="nm2"></span> slope is the same whatever the value of <span class="nm1"></span>. To test for an interaction, we introduce a product term, <span class="nm0"></span>×<span class="nm1"></span>, formed by multiplying the two predictors. The result is a <i>multiplicative</i> model: <i>Ŷ</i> = <i>b</i><sub>0</sub> + <i>b</i><sub>1</sub><span class="nm0"></span> + <i>b</i><sub>2</sub><span class="nm1"></span> + <i>b</i><sub>3</sub>(<span class="nm0"></span>×<span class="nm1"></span>). Because the predictors are multiplied, the contribution of <span class="nm0"></span> depends on the value of <span class="nm1"></span>, and vice versa. The model is still linear in its weights, so it is estimated by ordinary least squares like any other regression; “multiplicative” refers to the product of the predictors, not to the way the weights are estimated.</p>
+      <p class="sectionlede" style="margin-top:8px">The additive and multiplicative components are often entered hierarchically in order to isolate the contribution of the product beyond that of its components. Here, <span class="nm0"></span> and <span class="nm1"></span> are entered in a first step, and the product term is entered in a second step. The interaction is tested by the increase in R² from the first step to the second (equivalently, by the t-test of the product's weight in the second-step model). If it is significant, probe it by computing the <span class="nm0"></span>–<span class="nm2"></span> slope at chosen values of <span class="nm1"></span>.</p>
+      <div class="out" style="margin-top:12px">
+        <section class="panel">
+          <h2>Hierarchical test of the interaction</h2>
+          <div class="tbl"><table id="tH"></table></div>
+          <p class="note" id="noteH"></p>
+        </section>
+        <section class="panel">
+          <h2>Coefficients with the product term</h2>
+          <div class="tbl"><table id="tF"></table></div>
+          <p class="note" id="noteF"></p>
+        </section>
+        <section class="panel wide">
+          <h2>Interpreting the moderated regression equation</h2>
+          <div class="eq" id="eq2" style="margin-top:0;padding-top:0;border-top:0"></div>
+        </section>
+        <section class="panel wide">
+          <h2>Plot of the interaction</h2>
+          <p class="prose">A significant interaction is usually followed by a plot. The coefficients show that the <span class="nm0"></span>–<span class="nm2"></span> slope depends on <span class="nm1"></span>. The plot shows the direction in which, and the degree to which, that slope changes as a function of <span class="nm1"></span>: whether the relationship grows stronger or weaker as <span class="nm1"></span> increases, by how much, and whether it ever reverses.</p>
+          <div id="plotInt"></div>
+          <p class="prose" id="intText" style="margin-top:8px"></p>
+          <p class="note">Following Aiken &amp; West (1991), each line shows the predicted value of <span class="nm2"></span> across <span class="nm0"></span>, from 1 SD below to 1 SD above its mean, for cases at one value of <span class="nm1"></span>. The lines come from the model with the product term. Shaded bands are 95% confidence intervals for the predicted means.</p>
+        </section>
+        <section class="panel">
+          <h2>Simple <span class="nm0"></span>–<span class="nm2"></span> slopes</h2>
+          <div class="tbl"><table id="tSS"></table></div>
+          <p class="note">Each row is the <span class="nm0"></span>–<span class="nm2"></span> slope for cases at one value of <span class="nm1"></span> (mean and ±1 SD; Aiken &amp; West, 1991). The slope is <i>b</i><sub>1</sub> + <i>b</i><sub>3</sub>·<span class="nm1"></span><sub>c</sub>, and its standard error uses the full covariance matrix of the weights: SE = √[Var(<i>b</i><sub>1</sub>) + 2·<span class="nm1"></span><sub>c</sub>·Cov(<i>b</i><sub>1</sub>, <i>b</i><sub>3</sub>) + <span class="nm1"></span><sub>c</sub>²·Var(<i>b</i><sub>3</sub>)], where <span class="nm1"></span><sub>c</sub> is <span class="nm1"></span> minus its mean. The colors match the lines in the plots.</p>
+        </section>
+        <section class="panel">
+          <h2>Standardized coefficients</h2>
+          <div class="tbl"><table id="tFS"></table></div>
+          <p class="note" id="noteFS"></p>
+        </section>
+        <section class="panel wide">
+          <h2>Johnson–Neyman: where is the <span class="nm0"></span>–<span class="nm2"></span> slope significant?</h2>
+          <div id="plotJN"></div>
+          <p class="prose" id="jnText" style="margin-top:8px"></p>
+          <p class="note">Rather than picking a few values of <span class="nm1"></span>, the Johnson–Neyman technique (Johnson &amp; Neyman, 1936; Bauer &amp; Curran, 2005) finds the values at which the slope's 95% confidence interval just touches zero. The shaded regions are where the <span class="nm0"></span>–<span class="nm2"></span> slope differs significantly from zero. The dots mark the three values used in the simple-slopes table.</p>
+        </section>
+        <section class="panel wide">
+          <h2>What changed from step 1</h2>
+          <p class="prose">Both columns use the same underlying random draws; the only difference is the interaction. In step 1, β<sub>3</sub> = 0. In step 2, β<sub>3</sub> = <span id="cmpB3"></span>.</p>
+          <div class="tbl"><table id="tCmp"></table></div>
+          <ul class="notice" id="cmpNotes"></ul>
+        </section>
+        <section class="panel">
+          <h2>Centering</h2>
+          <div class="tbl"><table id="tCen"></table></div>
+          <p class="prose" style="margin-top:10px">Centering <span class="nm0"></span> and <span class="nm1"></span> before forming their product changes <i>b</i><sub>1</sub>, <i>b</i><sub>2</sub>, their standard errors, and the VIFs. It does not change <i>b</i><sub>3</sub>, its test, R², ΔR², the predicted values, or the simple slopes.</p>
+          <p class="prose">When the predictors have means far from zero, the uncentered product is highly correlated with each of them. This is often called <i>nonessential multicollinearity</i> (Cohen, Cohen, West, &amp; Aiken, 2003): it arises only because of where zero happens to fall on each scale, and it does not affect the test of the interaction. The real reason to center is interpretive. Without centering, <i>b</i><sub>1</sub> is the <span class="nm0"></span>–<span class="nm2"></span> slope when <span class="nm1"></span> = 0, which may be a value no one in the sample has.</p>
+        </section>
+        <section class="panel">
+          <h2>Power to detect the interaction</h2>
+          <p class="prose">Interactions are hard to detect in field data. Their effect sizes are usually small, predictors are rarely spread out to the extremes where interactions show most clearly (McClelland &amp; Judd, 1993), and measurement error in <span class="nm0"></span> and <span class="nm1"></span> is compounded in their product (Busemeyer &amp; Jones, 1983). Estimate the power of the ΔR² test for the current population and sample size by drawing many samples.</p>
+          <div class="popbox" id="powPop"></div>
+          <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <button class="btn" id="powerBtn">Estimate power (1,000 samples)</button>
+          </div>
+          <p class="callout" id="powerOut" hidden></p>
+        </section>
+        <section class="panel wide">
+          <h2>References</h2>
+          <ul class="refs">
+            <li>Aiken, L. S., &amp; West, S. G. (1991). <i>Multiple regression: Testing and interpreting interactions</i>. Sage.</li>
+            <li>Bauer, D. J., &amp; Curran, P. J. (2005). Probing interactions in fixed and multilevel regression: Inferential and graphical techniques. <i>Multivariate Behavioral Research, 40</i>(3), 373–400.</li>
+            <li>Busemeyer, J. R., &amp; Jones, L. E. (1983). Analysis of multiplicative combination rules when the causal variables are measured with error. <i>Psychological Bulletin, 93</i>(3), 549–562.</li>
+            <li>Cohen, J., Cohen, P., West, S. G., &amp; Aiken, L. S. (2003). <i>Applied multiple regression/correlation analysis for the behavioral sciences</i> (3rd ed.). Erlbaum.</li>
+            <li>Friedrich, R. J. (1982). In defense of multiplicative terms in multiple regression equations. <i>American Journal of Political Science, 26</i>(4), 797–833.</li>
+            <li>Johnson, P. O., &amp; Neyman, J. (1936). Tests of certain linear hypotheses and their application to some educational problems. <i>Statistical Research Memoirs, 1</i>, 57–93.</li>
+            <li>McClelland, G. H., &amp; Judd, C. M. (1993). Statistical difficulties of detecting interactions and moderator effects. <i>Psychological Bulletin, 114</i>(2), 376–390.</li>
+          </ul>
+        </section>
+      </div>
+    </div>
+
+    <div class="out">
+      <section class="panel wide">
+        <h2>Sample descriptives</h2>
+        <div class="tbl"><table id="tD"></table></div>
+        <p class="note" id="noteD"></p>
+      </section>
+    </div>
+  </main>
+</div>
+</div>
+
+<script>
+(function(){
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+const S = {
+  names:['X1','X2','Y'], m:[50,100,20], s:[10,15,5],
+  r:{r12:.30, r1y:.50, r2y:.40}, b3:.30,
+  stage:1, center:true, n:200, exact:true, seed:7,
+  ortho:false, surf:true, lines:true, addPlane:false
+};
+const DEF=['X1','X2','Y'];
+const PAIRS = {r12:[0,1], r1y:[0,2], r2y:[1,2]};
+const VCOL = ['--x1','--x2','--y'];
+function getR(a,b){ if(a===b) return 1; const k=[a,b].sort().join(''); return {'01':S.r.r12,'02':S.r.r1y,'12':S.r.r2y}[k]; }
+
+/* ---------- population ---------- */
+function popAdd(){
+  const {r12,r1y,r2y}=S.r, den=1-r12*r12;
+  const B1=(r1y-r2y*r12)/den, B2=(r2y-r1y*r12)/den;
+  return {B1,B2,R2:B1*r1y+B2*r2y};
+}
+function b3max(){ const P=popAdd(); return Math.sqrt(Math.max(0,0.99-P.R2)/(1+S.r.r12*S.r.r12)); }
+
+/* ---------- controls ---------- */
+function numRow(label,id,min,max,step,val,onset){
+  return {html:`<div class="row"><label for="${id}R">${label}</label>
+    <input type="range" id="${id}R" min="${min}" max="${max}" step="${step}" value="${val}">
+    <input type="number" id="${id}N" step="${step}" value="${val}"></div>`, id, onset, min, max};
+}
+function buildVars(){
+  let html=''; const rows=[];
+  for(let i=0;i<3;i++){
+    const rm=numRow('Mean','m'+i,-200,200,0.5,S.m[i],v=>{S.m[i]=v;});
+    const rs=numRow('SD','s'+i,0.5,60,0.5,S.s[i],v=>{S.s[i]=Math.max(0.01,v);});
+    rows.push(rm,rs);
+    html+=`<div class="var" style="--c:var(${VCOL[i]})">
+      <label class="role" for="name${i}">${['Predictor 1 (focal predictor)','Predictor 2 (moderator)','Outcome'][i]} label</label>
+      <input class="name" id="name${i}" type="text" value="${esc(S.names[i])}" placeholder="${DEF[i]}" maxlength="40" autocomplete="off" spellcheck="false">
+      ${rm.html}${rs.html}</div>`;
+  }
+  $('#vars').innerHTML=html;
+  rows.forEach(r=>{
+    const R=$('#'+r.id+'R'), N=$('#'+r.id+'N');
+    R.addEventListener('input',()=>{N.value=R.value;r.onset(+R.value);update();});
+    N.addEventListener('input',()=>{ if(N.value===''||isNaN(+N.value))return; r.onset(+N.value); R.value=Math.min(r.max,Math.max(r.min,+N.value)); update();});
+  });
+  for(let i=0;i<3;i++){
+    $('#name'+i).addEventListener('input',e=>{S.names[i]=e.target.value.trim()||DEF[i]; buildCorrLabels(); update();});
+  }
+}
+function buildCorrs(){
+  let html='';
+  for(const k of Object.keys(PAIRS)){
+    html+=`<div class="corr" id="c_${k}">
+      <div class="top"><span id="lab_${k}"></span><input type="number" id="${k}N" min="-0.99" max="0.99" step="0.01" aria-label="correlation value"></div>
+      <div class="track"><div class="rail"></div><div class="zero"></div><div class="band" id="band_${k}"></div>
+      <input type="range" id="${k}R" min="-0.99" max="0.99" step="0.01" aria-labelledby="lab_${k}"></div>
+      <p class="hint" id="warn_${k}" aria-live="polite"></p></div>`;
+  }
+  $('#corrs').innerHTML=html;
+  for(const k of Object.keys(PAIRS)){
+    const R=$('#'+k+'R'), N=$('#'+k+'N');
+    R.value=S.r[k]; N.value=S.r[k].toFixed(2);
+    const set=(v,src)=>{
+      const [lo,hi]=feasible(k);
+      const a=Math.max(-0.99,lo+0.005), b=Math.min(0.99,hi-0.005);
+      let c=Math.min(b,Math.max(a,v));
+      c=Math.round(c*1000)/1000;
+      const w=$('#warn_'+k);
+      if(Math.abs(c-v)>0.0051){ w.textContent=`Clamped: with the other two correlations fixed, this one must lie between ${lo.toFixed(2)} and ${hi.toFixed(2)}.`; w.className='hint flash'; }
+      else { w.textContent=''; w.className='hint'; }
+      S.r[k]=c;
+      if(src!=='R'||Math.abs(c-v)>1e-9) R.value=c;
+      if(src!=='N'||Math.abs(c-v)>1e-9) N.value=c.toFixed(2);
+      clampB3();
+      update();
+    };
+    R.addEventListener('input',()=>set(+R.value,'R'));
+    N.addEventListener('change',()=>{ if(N.value!==''&&!isNaN(+N.value)) set(+N.value,'N'); });
+  }
+  buildCorrLabels();
+}
+function buildCorrLabels(){
+  const n=S.names.map(esc);
+  for(const k in PAIRS){
+    const [a,b]=PAIRS[k];
+    $('#lab_'+k).innerHTML=`r(<span style="color:var(${VCOL[a]});font-weight:600">${n[a]}</span>, <span style="color:var(${VCOL[b]});font-weight:600">${n[b]}</span>)`;
+  }
+  for(let i=0;i<3;i++) document.querySelectorAll('.nm'+i).forEach(e=>e.textContent=S.names[i]);
+}
+function feasible(k){
+  const [a,b]=PAIRS[k]; const c=3-a-b;
+  const rac=getR(a,c), rbc=getR(b,c);
+  const h=Math.sqrt(Math.max(0,(1-rac*rac)*(1-rbc*rbc)));
+  return [rac*rbc-h, rac*rbc+h];
+}
+const b3R=$('#b3R'), b3N=$('#b3N');
+function setB3(v){
+  const mx=b3max();
+  const lim=Math.floor(mx*100)/100;
+  let c=Math.round(v*100)/100;
+  const w=$('#warn_b3');
+  if(Math.abs(c)>lim){ c=Math.sign(c)*lim; w.textContent=`Limited to ±${lim.toFixed(2)} with the current correlations.`; w.className='hint flash'; }
+  else { w.textContent=''; w.className='hint'; }
+  S.b3=c; b3R.value=c; b3N.value=c.toFixed(2);
+  update();
+}
+function clampB3(){
+  const lim=Math.floor(b3max()*100)/100;
+  if(Math.abs(S.b3)>lim){
+    S.b3=Math.sign(S.b3)*lim; b3R.value=S.b3; b3N.value=S.b3.toFixed(2);
+    const w=$('#warn_b3');
+    w.textContent=`Reduced to ${fs(S.b3,2)}: with these correlations, ${S.names[0]} and ${S.names[1]} already explain R² = ${fs(popAdd().R2,2)} of ${S.names[2]}, which leaves less room for the interaction.`;
+    w.className='hint flash';
+  }
+}
+b3R.addEventListener('input',()=>setB3(+b3R.value));
+b3N.addEventListener('change',()=>{ if(b3N.value!==''&&!isNaN(+b3N.value)) setB3(+b3N.value); });
+
+function drawBands(){
+  const pct=v=>((v+0.99)/1.98)*100;
+  for(const k of Object.keys(PAIRS)){
+    const [lo,hi]=feasible(k);
+    const L=Math.max(-0.99,lo), H=Math.min(0.99,hi);
+    const band=$('#band_'+k);
+    band.style.left=pct(L)+'%'; band.style.width=Math.max(0,pct(H)-pct(L))+'%';
+  }
+  const mx=Math.min(0.8,b3max()); const q=v=>((v+0.8)/1.6)*100;
+  const bb=$('#band_b3'); bb.style.left=q(-mx)+'%'; bb.style.width=(q(mx)-q(-mx))+'%';
+}
+function drawMatrix(){
+  const n=S.names; let html='';
+  for(let i=0;i<3;i++) for(let j=0;j<3;j++){
+    if(i===j){ html+=`<div class="cell diag" style="color:var(${VCOL[i]})" title="${esc(n[i])}">${esc(n[i])}</div>`; continue; }
+    const r=getR(i,j); const col=r>=0?'var(--y)':'var(--x2)';
+    const pct=Math.round(Math.abs(r)*55);
+    const key={'01':'r12','02':'r1y','12':'r2y'}[[i,j].sort().join('')];
+    html+=`<button class="cell" data-k="${key}" style="background:color-mix(in srgb, ${col} ${pct}%, var(--bg))" title="Edit r(${esc(n[i])}, ${esc(n[j])})">${fmtR(r)}</button>`;
+  }
+  $('#matrix').innerHTML=html;
+  $('#matrix').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>$('#'+b.dataset.k+'R').focus()));
+}
+const fmtR=r=>(r<0?'−':'')+Math.abs(r).toFixed(2).replace(/^0/,'');
+
+/* ---------- random data ---------- */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;}}
+function normals(n,seed){
+  const rng=mulberry32((seed*2654435761)>>>0);
+  const Z=[new Float64Array(n),new Float64Array(n),new Float64Array(n)];
+  for(let c=0;c<3;c++) for(let i=0;i<n;i++){
+    let u=0; while(u===0)u=rng(); const v=rng();
+    Z[c][i]=Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+  }
+  return Z;
+}
+let Zcache={key:null,Z:null};
+function baseNormals(n,seed){
+  const key=n+'|'+seed; if(Zcache.key===key) return Zcache.Z;
+  const Z=normals(n,seed); Zcache={key,Z}; return Z;
+}
+const dot=(a,b)=>{let s=0;for(let i=0;i<a.length;i++)s+=a[i]*b[i];return s;};
+function orthonormalize(Z,n){
+  const W=Z.map(c=>Float64Array.from(c));
+  for(const c of W){ let m=0; for(const v of c)m+=v; m/=n; for(let i=0;i<n;i++)c[i]-=m; }
+  for(let j=0;j<3;j++){
+    for(let k=0;k<j;k++){ const p=dot(W[j],W[k]); for(let i=0;i<n;i++)W[j][i]-=p*W[k][i]; }
+    const nr=Math.sqrt(dot(W[j],W[j])); for(let i=0;i<n;i++)W[j][i]/=nr;
+  }
+  const sc=Math.sqrt(n-1); for(const c of W) for(let i=0;i<n;i++)c[i]*=sc;
+  return W;
+}
+/* Standardized population model:
+   zY = B1·z1 + B2·z2 + b3·(z1·z2 − r12) + e, with z1, z2 bivariate normal (corr r12).
+   For bivariate normal z1, z2, the product z1·z2 is uncorrelated with z1 and z2 and has variance 1 + r12²,
+   so the interaction leaves r(X1,Y), r(X2,Y) unchanged and adds ΔR² = b3²(1 + r12²).
+   SD(Y) is held at its setting, so the error variance shrinks as the interaction grows. */
+function generate(o){
+  const n=o.n, Z0=o.cache?baseNormals(n,o.seed):normals(n,o.seed);
+  const W=o.exact?orthonormalize(Z0,n):Z0;
+  const P=popAdd(), rho=S.r.r12, k=Math.sqrt(1-rho*rho), b3=o.b3;
+  const z1=new Float64Array(n), z2=new Float64Array(n), pc=new Float64Array(n), sys=new Float64Array(n), e=new Float64Array(n);
+  let mp=0;
+  for(let i=0;i<n;i++){ z1[i]=W[0][i]; z2[i]=rho*W[0][i]+k*W[1][i]; pc[i]=z1[i]*z2[i]; mp+=pc[i]; }
+  mp = o.exact ? mp/n : rho;
+  for(let i=0;i<n;i++){ pc[i]-=mp; sys[i]=P.B1*z1[i]+P.B2*z2[i]+b3*pc[i]; }
+  if(o.exact){
+    // error: orthogonal to z1, z2 and the product, scaled so SD(Y) is exact
+    const nn=n-1, a0=dot(pc,W[0])/nn, a1=dot(pc,W[1])/nn;
+    const pr=new Float64Array(n); for(let i=0;i<n;i++) pr[i]=pc[i]-a0*W[0][i]-a1*W[1][i];
+    const pp=dot(pr,pr), cp=pp>1e-12?dot(W[2],pr)/pp:0;
+    for(let i=0;i<n;i++) e[i]=W[2][i]-cp*pr[i];
+    const sse0=dot(e,e), ssys=dot(sys,sys);
+    const target=Math.max(nn-ssys, 0.01*nn);
+    const sc=sse0>0?Math.sqrt(target/sse0):0;
+    for(let i=0;i<n;i++) e[i]*=sc;
+  } else {
+    const sigE=Math.sqrt(Math.max(1e-6,1-P.R2-b3*b3*(1+rho*rho)));
+    for(let i=0;i<n;i++) e[i]=sigE*W[2][i];
+  }
+  const x1=new Float64Array(n), x2=new Float64Array(n), y=new Float64Array(n);
+  for(let i=0;i<n;i++){
+    x1[i]=S.m[0]+S.s[0]*z1[i];
+    x2[i]=S.m[1]+S.s[1]*z2[i];
+    y[i]=S.m[2]+S.s[2]*(sys[i]+e[i]);
+  }
+  return {x1,x2,y,n};
+}
+
+/* ---------- distributions ---------- */
+function lgamma(z){const c=[0.99999999999980993,676.5203681218851,-1259.1392167224028,771.32342877765313,-176.61502916214059,12.507343278686905,-0.13857109526572012,9.9843695780195716e-6,1.5056327351493116e-7];
+  if(z<0.5)return Math.log(Math.PI/Math.sin(Math.PI*z))-lgamma(1-z); z-=1; let x=c[0]; for(let i=1;i<9;i++)x+=c[i]/(z+i); const t=z+7.5; return 0.5*Math.log(2*Math.PI)+(z+0.5)*Math.log(t)-t+Math.log(x);}
+function betacf(x,a,b){const FP=1e-300;let qab=a+b,qap=a+1,qam=a-1,c=1,d=1-qab*x/qap;if(Math.abs(d)<FP)d=FP;d=1/d;let h=d;
+  for(let m=1;m<=300;m++){const m2=2*m;let aa=m*(b-m)*x/((qam+m2)*(a+m2));d=1+aa*d;if(Math.abs(d)<FP)d=FP;c=1+aa/c;if(Math.abs(c)<FP)c=FP;d=1/d;h*=d*c;
+    aa=-(a+m)*(qab+m)*x/((a+m2)*(qap+m2));d=1+aa*d;if(Math.abs(d)<FP)d=FP;c=1+aa/c;if(Math.abs(c)<FP)c=FP;d=1/d;const del=d*c;h*=del;if(Math.abs(del-1)<3e-14)break;}return h;}
+function ibeta(x,a,b){if(x<=0)return 0;if(x>=1)return 1;const bt=Math.exp(lgamma(a+b)-lgamma(a)-lgamma(b)+a*Math.log(x)+b*Math.log(1-x));
+  return x<(a+1)/(a+b+2)?bt*betacf(x,a,b)/a:1-bt*betacf(1-x,b,a)/b;}
+const pT=(t,df)=>ibeta(df/(df+t*t),df/2,0.5);          // two-tailed
+const pF=(F,d1,d2)=>F<=0?1:ibeta(d2/(d2+d1*F),d2/2,d1/2);
+const tcMemo={};
+function tCrit(df){ if(tcMemo[df])return tcMemo[df]; let lo=0,hi=100; for(let i=0;i<80;i++){const m=(lo+hi)/2; if(pT(m,df)>0.05)lo=m;else hi=m;} return tcMemo[df]=(lo+hi)/2; }
+
+/* ---------- OLS ---------- */
+function invert(M){
+  const k=M.length; const A=M.map((r,i)=>[...r,...Array.from({length:k},(_,j)=>i===j?1:0)]);
+  for(let c=0;c<k;c++){
+    let p=c; for(let r=c+1;r<k;r++) if(Math.abs(A[r][c])>Math.abs(A[p][c])) p=r;
+    [A[c],A[p]]=[A[p],A[c]];
+    const v=A[c][c]; if(Math.abs(v)<1e-14) return null;
+    for(let j=0;j<2*k;j++) A[c][j]/=v;
+    for(let r=0;r<k;r++) if(r!==c){ const f=A[r][c]; if(f) for(let j=0;j<2*k;j++) A[r][j]-=f*A[c][j]; }
+  }
+  return A.map(r=>r.slice(k));
+}
+function ols(X,y,lite){
+  const k=X.length, n=y.length;
+  const mean=a=>{let s=0;for(let i=0;i<n;i++)s+=a[i];return s/n;};
+  const mx=X.map(mean), my=mean(y);
+  const Sm=Array.from({length:k},()=>new Array(k).fill(0)), sxy=new Array(k).fill(0); let syy=0;
+  const dv=new Array(k);
+  for(let i=0;i<n;i++){
+    const dy=y[i]-my; syy+=dy*dy;
+    for(let a=0;a<k;a++) dv[a]=X[a][i]-mx[a];
+    for(let a=0;a<k;a++){ sxy[a]+=dv[a]*dy; for(let b=a;b<k;b++) Sm[a][b]+=dv[a]*dv[b]; }
+  }
+  for(let a=0;a<k;a++) for(let b=0;b<a;b++) Sm[a][b]=Sm[b][a];
+  // invert via the correlation matrix for numerical stability (uncentered products are large)
+  const D=Sm.map((r,i)=>Math.sqrt(r[i]));
+  const Ri=invert(Sm.map((r,i)=>r.map((v,j)=>v/(D[i]*D[j]))));
+  if(!Ri) return null;
+  const Si=Ri.map((r,i)=>r.map((v,j)=>v/(D[i]*D[j])));
+  const b=Si.map(r=>r.reduce((s,v,j)=>s+v*sxy[j],0));
+  const b0=my-b.reduce((s,v,j)=>s+v*mx[j],0);
+  let sse=0;
+  for(let i=0;i<n;i++){ let p=b0; for(let j=0;j<k;j++) p+=b[j]*X[j][i]; const e=y[i]-p; sse+=e*e; }
+  const df=n-k-1, mse=sse/df, R2=1-sse/syy;
+  const sdx=D.map(v=>v/Math.sqrt(n-1)), sdy=Math.sqrt(syy/(n-1));
+  if(lite) return {b,b0,R2,df,sdx,sdy};
+  const cov=Si.map(r=>r.map(v=>v*mse));
+  let q=0; for(let a=0;a<k;a++) for(let c=0;c<k;c++) q+=mx[a]*Si[a][c]*mx[c];
+  const se0=Math.sqrt(mse*(1/n+q));
+  const cov0=Si.map(r=>-mse*r.reduce((s,v,c)=>s+v*mx[c],0));
+  const tc=tCrit(df);
+  const mk=(bb,se)=>{const t=bb/se; return {b:bb,se,t,p:pT(t,df),lo:bb-tc*se,hi:bb+tc*se};};
+  const coef=[mk(b0,se0), ...b.map((bb,j)=>mk(bb,Math.sqrt(cov[j][j])))];
+  const F=(R2/k)/((1-R2)/df);
+  return {k,n,b,b0,coef,cov,R2,adj:1-(1-R2)*(n-1)/df,F,pF:pF(F,k,df),df,mse,see:Math.sqrt(mse),tc,vif:Ri.map((r,j)=>r[j]),sdx,sdy,mx,var0:se0*se0,cov0};
+}
+function corrMat(V){
+  const n=V[0].length, k=V.length;
+  const m=V.map(a=>{let s=0;for(let i=0;i<n;i++)s+=a[i];return s/n;});
+  const C=Array.from({length:k},()=>new Array(k).fill(0));
+  for(let i=0;i<n;i++) for(let a=0;a<k;a++){ const da=V[a][i]-m[a]; for(let b=a;b<k;b++) C[a][b]+=da*(V[b][i]-m[b]); }
+  for(let a=0;a<k;a++) for(let b=0;b<a;b++) C[a][b]=C[b][a];
+  return {m, sd:C.map((r,i)=>Math.sqrt(r[i]/(n-1))), r:C.map((r,a)=>r.map((v,b)=>v/Math.sqrt(C[a][a]*C[b][b])))};
+}
+
+/* ---------- analysis ---------- */
+function analyze(d){
+  const {x1,x2,y,n}=d;
+  const base=corrMat([x1,x2,y]); const m=base.m, sd=base.sd;
+  const x1c=new Float64Array(n), x2c=new Float64Array(n), pc=new Float64Array(n), pr=new Float64Array(n);
+  const z1=new Float64Array(n), z2=new Float64Array(n), zy=new Float64Array(n), zp=new Float64Array(n);
+  for(let i=0;i<n;i++){
+    x1c[i]=x1[i]-m[0]; x2c[i]=x2[i]-m[1]; pc[i]=x1c[i]*x2c[i]; pr[i]=x1[i]*x2[i];
+    z1[i]=x1c[i]/sd[0]; z2[i]=x2c[i]/sd[1]; zy[i]=(y[i]-m[2])/sd[2]; zp[i]=z1[i]*z2[i];
+  }
+  const add=ols([x1,x2],y), fullC=ols([x1c,x2c,pc],y), fullR=ols([x1,x2,pr],y);
+  const stdAdd=ols([z1,z2],zy,true), stdFull=ols([z1,z2,zp],zy,true);
+  const prod=S.center?pc:pr;
+  const D4=corrMat([x1,x2,y,prod]);
+  const rCen=corrMat([x1,pc]).r[0][1], rRaw=corrMat([x1,pr]).r[0][1];
+  const df2=n-4, dR2=fullC.R2-add.R2, Fch=dR2/((1-fullC.R2)/df2), pch=pF(Fch,1,df2);
+  const C=fullC.cov, [b1,,b3]=fullC.b, tc=fullC.tc;
+  const lv=[m[1]-sd[1], m[1], m[1]+sd[1]];
+  const ssAt=w=>{const wc=w-m[1]; const s=b1+b3*wc; const se=Math.sqrt(Math.max(0,C[0][0]+2*wc*C[0][2]+wc*wc*C[2][2])); return {w,s,se,t:s/se,p:pT(s/se,df2),lo:s-tc*se,hi:s+tc*se};};
+  const ss=lv.map(ssAt);
+  let mn2=Infinity,mx2=-Infinity,mn1=Infinity,mx1=-Infinity;
+  for(let i=0;i<n;i++){ if(x2[i]<mn2)mn2=x2[i]; if(x2[i]>mx2)mx2=x2[i]; if(x1[i]<mn1)mn1=x1[i]; if(x1[i]>mx1)mx1=x1[i]; }
+  const predAdd=(u,v)=>add.b0+add.b[0]*u+add.b[1]*v;
+  const predFull=(u,v)=>fullC.b0+fullC.b[0]*(u-m[0])+fullC.b[1]*(v-m[1])+fullC.b[2]*(u-m[0])*(v-m[1]);
+  // Johnson–Neyman: slope significant where a·wc² + bq·wc + c > 0
+  const t2=tc*tc, ja=b3*b3-t2*C[2][2], jb=2*(b1*b3-t2*C[0][2]), jc=b1*b1-t2*C[0][0];
+  const sigAt=w=>{const wc=w-m[1]; return ja*wc*wc+jb*wc+jc>0;};
+  const disc=jb*jb-4*ja*jc;
+  let roots=null; if(disc>=0 && Math.abs(ja)>1e-18){ const sq=Math.sqrt(disc); roots=[(-jb-sq)/(2*ja)+m[1],(-jb+sq)/(2*ja)+m[1]].sort((a,b)=>a-b); }
+  let inSig=0; for(let i=0;i<n;i++) if(sigAt(x2[i])) inSig++;
+  return {n,m,sd,add,fullC,fullR,stdAdd,stdFull,D4,rCen,rRaw,dR2,Fch,pch,df2,lv,ss,ssAt,mn1,mx1,mn2,mx2,predAdd,predFull,
+    jn:{a:ja,roots,sigAt,share:inSig/n}};
+}
+
+/* ---------- formatting ---------- */
+function f(x,d=3){ if(!isFinite(x))return '—'; const s=Math.abs(x)>=1e5?x.toExponential(2):x.toFixed(d); return s.replace(/^-/,'−'); }
+function fp(p){ return !isFinite(p)?'—':p<0.001?'< .001':p.toFixed(3).replace(/^0/,''); }
+function fs(x,d=3){ return f(x,d).replace(/^(−?)0\./,'$1.'); }
+const sg=(v,d=3)=>(v<0?' − ':' + ')+f(Math.abs(v),d);
+const sgs=(v,d=3)=>(v<0?' − ':' + ')+fs(Math.abs(v),d);
+const cls=['v1','v2','vy','vz'];
+
+/* ---------- render ---------- */
+const INTRO={
+  1:'In this population the effect of the first predictor on the outcome is the same at every level of the second. The fitted surface is a flat plane, and slices through it at different values of the second predictor give parallel lines.',
+  2:'Now the slope relating the first predictor to the outcome depends on the value of the second. Use the Interaction slider to set how strongly. The plane twists, the lines fan out, and the analysis adds the product of the two predictors: moderated multiple regression.'
+};
+let powerKey=null;
+function update(){
+  drawBands(); drawMatrix(); popText();
+  const st2=S.stage===2;
+  const d=generate({n:S.n,seed:S.seed,exact:S.exact,b3:st2?S.b3:0,cache:true});
+  const A=analyze(d);
+  let A1=null; if(st2) A1=analyze(generate({n:S.n,seed:S.seed,exact:S.exact,b3:0,cache:true}));
+  renderEq(A);
+  if(st2) renderStep2(A,A1); else renderStep1(A);
+  renderDesc(A);
+  renderPlot3(d,A); renderPlot2(d,A); if(st2){ renderInt(A); renderJN(A); }
+  $('#sampleHint').textContent = S.exact
+    ? 'The predictors’ means, SDs and correlation, the outcome’s mean and SD, and the regression weights all equal the population values exactly. Moving a slider reshapes the same underlying draws.'
+    : 'Sample statistics vary from the population values by chance. Draw a new sample to see how much.';
+  const pk=JSON.stringify([S.r,S.b3,S.n]);
+  if(powerKey && pk!==powerKey){ powerRun++; $('#powerOut').innerHTML='Settings changed since the last estimate. Run it again to update.'; $('#powerBtn').disabled=false; powerKey=null; }
+}
+function popText(){
+  const P=popAdd(), b3=S.b3, r=S.r.r12, dR2=b3*b3*(1+r*r), n=S.names.map(esc);
+  $('#popBox').innerHTML=`In the population, the standardized <b>${n[0]}</b>–${n[2]} slope is <b>${fs(P.B1-b3,2)}</b> at 1 SD below the mean of ${n[1]}, <b>${fs(P.B1,2)}</b> at its mean, and <b>${fs(P.B1+b3,2)}</b> at 1 SD above. The interaction adds ΔR² = β<sub>3</sub>²(1 + r²) = <b>${fs(dR2)}</b>, where r = r(${n[0]}, ${n[1]}).`;
+  const R2f=P.R2+dR2;
+  $('#powPop').innerHTML=`Population: R² without the product = <b>${fs(P.R2)}</b>; ΔR² = <b>${fs(dR2)}</b>; Cohen’s f² for the interaction = ΔR²/(1 − R²<sub>full</sub>) = <b>${fs(dR2/(1-R2f))}</b>.`;
+}
+
+function renderEq(A){
+  const n=S.names.map(esc);
+  if(S.stage===1){
+    const c=A.add.coef, B=A.stdAdd.b;
+    $('#eq').innerHTML=`<div><span class="lab">Unstandardized</span><span class="hat"><i>${n[2]}</i></span> = ${f(c[0].b)}${sg(c[1].b)}·<i>${n[0]}</i>${sg(c[2].b)}·<i>${n[1]}</i></div>
+     <p class="eqnote">The weight for ${n[0]} is the change in ${n[2]} for a one-point increase in ${n[0]}, holding ${n[1]} constant. Because the equation has no term in which ${n[0]} and ${n[1]} are multiplied together, that weight is the same whatever value ${n[1]} is held at: for every one-point increase in ${n[0]}, we expect a ${fs(Math.abs(c[1].b))} ${c[1].b<0?'decrease':'increase'} in ${n[2]}, whether ${n[1]} is low, average or high.</p>
+     <div><span class="lab">Standardized</span><span class="hat"><i>z</i></span><sub>${n[2]}</sub> = ${fs(B[0])}·<i>z</i><sub>${n[0]}</sub>${sgs(B[1])}·<i>z</i><sub>${n[1]}</sub></div>`;
+    $('#key2').innerHTML=`Points are shaded by ${n[1]} (darker = higher). Each line is the model’s prediction for cases at one level of ${n[1]}. With no product term, the lines must be parallel.`;
+    return;
+  }
+  const F=S.center?A.fullC:A.fullR, c=F.coef, cen=S.center;
+  const v0=cen?`<i>${n[0]}</i><sub>c</sub>`:`<i>${n[0]}</i>`, v1=cen?`<i>${n[1]}</i><sub>c</sub>`:`<i>${n[1]}</i>`;
+  const B=A.stdFull.b, B0=A.stdFull.b0;
+  const zeroOut = !cen && (0<A.mn2 || 0>A.mx2);
+  const b1txt = cen
+    ? `<i>b</i><sub>1</sub> = ${fs(c[1].b)} is the ${n[0]}–${n[2]} slope for a case at the mean of ${n[1]} (where ${n[1]}<sub>c</sub> = 0). Because centered ${n[1]} averages zero, it is also the average of the simple slopes across the sample. It is not a slope that applies at every level of ${n[1]}, which is what the weight meant in step 1.`
+    : `<i>b</i><sub>1</sub> = ${fs(c[1].b)} is the ${n[0]}–${n[2]} slope for a case with ${n[1]} = 0.${zeroOut?` No one in this sample has a value near 0 (${n[1]} runs from ${f(A.mn2,1)} to ${f(A.mx2,1)}), so this weight describes a slope at a point outside the data. Check “Center” to make it describe the slope at the mean of ${n[1]}.`:''}`;
+  $('#eq2').innerHTML=`<div><span class="lab">Unstandardized</span><span class="hat"><i>${n[2]}</i></span> = ${f(c[0].b)}${sg(c[1].b)}·${v0}${sg(c[2].b)}·${v1}${sg(c[3].b,4)}·${v0}·${v1}</div>
+   <p class="eqnote">${cen?`${n[0]}<sub>c</sub> and ${n[1]}<sub>c</sub> are the predictors centered at their sample means (${f(A.m[0],2)} and ${f(A.m[1],2)}).`:`The predictors are uncentered, so the product is formed from the raw scores.`} The surface defined by this equation is no longer flat: the product term twists it.</p>
+   <div><span class="lab">Rearranged</span><span class="hat"><i>${n[2]}</i></span> = (${f(c[0].b)}${sg(c[2].b)}·${v1}) + (${f(c[1].b)}${sg(c[3].b,4)}·${v1})·${v0}</div>
+   <p class="eqnote">Collecting the terms that multiply ${n[0]} shows that the ${n[0]}–${n[2]} slope is no longer a single number. It is ${f(c[1].b)}${sg(c[3].b,4)}·${v1}, a straight-line function of ${n[1]}. So, <i>b</i><sub>3</sub> = ${fs(c[3].b,4)} is interpreted as follows: For every one-point increase in ${n[1]}, the ${n[0]}–${n[2]} slope ${c[3].b<0?'decreases':'increases'} by ${fs(Math.abs(c[3].b),4)}. The model is symmetric, so it is equally true that for every one-point increase in ${n[0]}, the ${n[1]}–${n[2]} slope changes by the same amount. Calling ${n[1]} the moderator is a theoretical choice, not a statistical one.</p>
+   <p class="eqnote">${b1txt}</p>
+   <div><span class="lab">Standardized</span><span class="hat"><i>z</i></span><sub>${n[2]}</sub> = ${fs(B0)}${sgs(B[0])}·<i>z</i><sub>${n[0]}</sub>${sgs(B[1])}·<i>z</i><sub>${n[1]}</sub>${sgs(B[2])}·<i>z</i><sub>${n[0]}</sub>·<i>z</i><sub>${n[1]}</sub></div>
+   <p class="eqnote">β<sub>3</sub> = ${fs(B[2])}: for every 1 SD increase in ${n[1]}, the standardized ${n[0]}–${n[2]} slope ${B[2]<0?'decreases':'increases'} by ${fs(Math.abs(B[2]))}. The intercept is not zero because the mean of <i>z</i><sub>${n[0]}</sub>·<i>z</i><sub>${n[1]}</sub> is (n − 1)/n × r(${n[0]}, ${n[1]}), not zero.</p>`;
+  $('#key2').innerHTML=`Points are shaded by ${n[1]} (darker = higher). Solid lines are the moderated model’s predictions at three levels of ${n[1]}.${S.addPlane?' Dashed lines are the additive model’s predictions, which are parallel by construction.':' Check “Additive model (step 1)” to add the additive model’s parallel lines for comparison.'}`;
+}
+
+function renderStep1(A){
+  const n=S.names.map(esc), c=A.add.coef, r=A.D4.r;
+  $('#b1txt').textContent=fs(c[1].b);
+  $('#tU').innerHTML=`<thead><tr><th>Term</th><th>b</th><th>SE</th><th>t</th><th>p</th><th>95% CI</th></tr></thead><tbody>
+   <tr><td>Intercept</td><td>${f(c[0].b)}</td><td>${f(c[0].se)}</td><td>${f(c[0].t,2)}</td><td>${fp(c[0].p)}</td><td>[${f(c[0].lo,2)}, ${f(c[0].hi,2)}]</td></tr>
+   ${[1,2].map(i=>`<tr><td class="${cls[i-1]}">${n[i-1]}</td><td>${f(c[i].b)}</td><td>${f(c[i].se)}</td><td>${f(c[i].t,2)}</td><td class="${c[i].p<.05?'sig':''}">${fp(c[i].p)}</td><td>[${f(c[i].lo,2)}, ${f(c[i].hi,2)}]</td></tr>`).join('')}
+  </tbody>`;
+  $('#noteU').innerHTML=`Each b is the change in <b>${n[2]}</b> for a one-unit change in that predictor, holding the other constant. df = ${A.add.df}.`;
+  const r12=r[0][1], den=1-r12*r12;
+  const sr=[(r[0][2]-r[1][2]*r12)/Math.sqrt(den),(r[1][2]-r[0][2]*r12)/Math.sqrt(den)];
+  $('#tS').innerHTML=`<thead><tr><th>Predictor</th><th>β</th><th>r with ${n[2]}</th><th>sr</th><th>sr²</th></tr></thead><tbody>
+   ${[0,1].map(i=>`<tr><td class="${cls[i]}">${n[i]}</td><td>${fs(A.stdAdd.b[i])}</td><td>${fs(r[i][2])}</td><td>${fs(sr[i])}</td><td>${fs(sr[i]**2)}</td></tr>`).join('')}
+  </tbody>`;
+  const M=A.add;
+  $('#tM').innerHTML=`<thead><tr><th>Statistic</th><th>Value</th></tr></thead><tbody>
+   <tr><td>R</td><td>${fs(Math.sqrt(Math.max(0,M.R2)))}</td></tr>
+   <tr><td>R²</td><td>${fs(M.R2)}</td></tr>
+   <tr><td>Adjusted R²</td><td>${fs(M.adj)}</td></tr>
+   <tr><td>F(2, ${M.df})</td><td>${f(M.F,2)}</td></tr>
+   <tr><td>p (model)</td><td class="${M.pF<.05?'sig':''}">${fp(M.pF)}</td></tr>
+   <tr><td>Std. error of estimate</td><td>${f(M.see)}</td></tr>
+  </tbody>`;
+}
+
+function renderStep2(A,A1){
+  const n=S.names.map(esc), nx=`${n[0]}×${n[1]}`;
+  const ad=A.add, fc=A.fullC, F=S.center?A.fullC:A.fullR, c=F.coef;
+  // hierarchical
+  $('#tH').innerHTML=`<thead><tr><th>Step</th><th>Predictors</th><th>R²</th><th>ΔR²</th><th>F change</th><th>df</th><th>p</th></tr></thead><tbody>
+   <tr><td>1</td><td><span style="color:var(--x1);font-weight:600">${n[0]}</span>, <span style="color:var(--x2);font-weight:600">${n[1]}</span></td><td>${fs(ad.R2)}</td><td>${fs(ad.R2)}</td><td>${f(ad.F,2)}</td><td>2, ${ad.df}</td><td class="${ad.pF<.05?'sig':''}">${fp(ad.pF)}</td></tr>
+   <tr><td>2</td><td>+ <span style="color:var(--xz);font-weight:600">${nx}</span></td><td>${fs(fc.R2)}</td><td>${fs(A.dR2)}</td><td>${f(A.Fch,2)}</td><td>1, ${A.df2}</td><td class="${A.pch<.05?'sig':''}">${fp(A.pch)}</td></tr>
+  </tbody>`;
+  const t3=fc.coef[3].t;
+  $('#noteH').innerHTML=`The interaction is tested by ΔR² at step 2. With one product term, this F equals the square of the t for <i>b</i><sub>3</sub> below: F = ${f(A.Fch,2)}, t² = ${f(t3*t3,2)}. ${A.pch<.05?`<b>The interaction is significant</b>, so the ${n[0]}–${n[2]} slope should be probed at different values of ${n[1]}.`:`<b>The interaction is not significant</b> in this sample, so the data do not show that the ${n[0]}–${n[2]} slope depends on ${n[1]}.`}`;
+  // coefficients
+  const lab=S.center?[`${n[0]}<sub>c</sub>`,`${n[1]}<sub>c</sub>`,`${n[0]}<sub>c</sub>×${n[1]}<sub>c</sub>`]:[n[0],n[1],nx];
+  const dg=[3,3,5];
+  $('#tF').innerHTML=`<thead><tr><th>Term</th><th>b</th><th>SE</th><th>t</th><th>p</th><th>95% CI</th><th>VIF</th></tr></thead><tbody>
+   <tr><td>Intercept</td><td>${f(c[0].b)}</td><td>${f(c[0].se)}</td><td>${f(c[0].t,2)}</td><td>${fp(c[0].p)}</td><td>[${f(c[0].lo,2)}, ${f(c[0].hi,2)}]</td><td></td></tr>
+   ${[1,2,3].map(i=>`<tr><td class="${['v1','v2','vz'][i-1]}">${lab[i-1]}</td><td>${f(c[i].b,dg[i-1])}</td><td>${f(c[i].se,dg[i-1])}</td><td>${f(c[i].t,2)}</td><td class="${c[i].p<.05?'sig':''}">${fp(c[i].p)}</td><td>[${f(c[i].lo,dg[i-1])}, ${f(c[i].hi,dg[i-1])}]</td><td>${f(F.vif[i-1],2)}</td></tr>`).join('')}
+  </tbody>`;
+  $('#noteF').innerHTML=S.center
+    ? `With centered predictors, the weights for ${n[0]} and ${n[1]} are the ${n[0]}–${n[2]} and ${n[1]}–${n[2]} slopes at the mean of the other predictor. They are conditional effects, not “main effects” that hold everywhere. df = ${F.df}.`
+    : `With uncentered predictors, the weights for ${n[0]} and ${n[1]} are the ${n[0]}–${n[2]} and ${n[1]}–${n[2]} slopes when the other predictor equals 0. Note the VIFs, and compare the Centering panel. df = ${F.df}.`;
+  // simple slopes
+  const shade=shades();
+  const lvl=['M − 1 SD','Mean','M + 1 SD'];
+  $('#tSS').innerHTML=`<thead><tr><th>${n[1]} level</th><th>${n[1]}</th><th>Slope</th><th>SE</th><th>t</th><th>p</th><th>95% CI</th></tr></thead><tbody>
+   ${A.ss.map((s,i)=>`<tr><td style="color:${shade[i]};font-weight:600">${lvl[i]}</td><td>${f(s.w,2)}</td><td>${f(s.s)}</td><td>${f(s.se)}</td><td>${f(s.t,2)}</td><td class="${s.p<.05?'sig':''}">${fp(s.p)}</td><td>[${f(s.lo,3)}, ${f(s.hi,3)}]</td></tr>`).join('')}
+  </tbody>`;
+  // standardized
+  const B=A.stdFull.b, naive=F.b.map((b,j)=>b*F.sdx[j]/F.sdy);
+  $('#tFS').innerHTML=`<thead><tr><th>Term</th><th>β (correct)</th><th>“Beta” from standardizing ${S.center?'the centered':'the raw'} product</th></tr></thead><tbody>
+   ${[0,1,2].map(i=>`<tr><td class="${['v1','v2','vz'][i]}">${i<2?n[i]:nx}</td><td>${fs(B[i])}</td><td>${fs(naive[i])}</td></tr>`).join('')}
+  </tbody>`;
+  $('#noteFS').innerHTML=`The correct standardized solution standardizes ${n[0]}, ${n[1]} and ${n[2]} first and then forms the product of the z-scores (Friedrich, 1982; Aiken &amp; West, 1991). The right-hand column is what most software labels “Beta”: it standardizes the product itself, which is not the product of the standardized predictors. That value changes when you toggle centering, and it cannot be read as the change in a standardized slope. The correct column does not change.`;
+  // J–N text
+  const J=A.jn, R=J.roots, inR=v=>v>=A.mn2&&v<=A.mx2;
+  let txt;
+  if(!R){ txt = J.a>0 ? `The ${n[0]}–${n[2]} slope is significant at every value of ${n[1]}.` : `The ${n[0]}–${n[2]} slope is not significant at any value of ${n[1]}.`; }
+  else if(J.a>0){ txt = `The ${n[0]}–${n[2]} slope is significant when ${n[1]} is below <b>${f(R[0],2)}</b> or above <b>${f(R[1],2)}</b>, and not significant between those values.`; }
+  else { txt = `The ${n[0]}–${n[2]} slope is significant only when ${n[1]} is between <b>${f(R[0],2)}</b> and <b>${f(R[1],2)}</b>.`; }
+  txt += ` Observed values of ${n[1]} run from ${f(A.mn2,2)} to ${f(A.mx2,2)}; ${Math.round(J.share*100)}% of the sample falls in the region of significance.`;
+  if(R && (!inR(R[0])||!inR(R[1]))) txt += ` A boundary outside the observed range is an extrapolation and should not be interpreted.`;
+  $('#jnText').innerHTML=txt;
+  // comparison
+  $('#cmpB3').textContent=fs(S.b3,2);
+  const rows=[
+    ['grp','Correlations'],
+    [`r(${n[0]}, ${n[2]})`, A1.D4.r[0][2], A.D4.r[0][2], 3],
+    [`r(${n[1]}, ${n[2]})`, A1.D4.r[1][2], A.D4.r[1][2], 3],
+    [`r(${n[0]}, ${n[1]})`, A1.D4.r[0][1], A.D4.r[0][1], 3],
+    ['grp','Additive model (no product term)'],
+    [`b for ${n[0]}`, A1.add.b[0], A.add.b[0], 3],
+    [`b for ${n[1]}`, A1.add.b[1], A.add.b[1], 3],
+    ['R²', A1.add.R2, A.add.R2, 3],
+    ['grp','Model with the product term'],
+    [`${n[0]}–${n[2]} slope at ${n[1]} = M − 1 SD`, A1.ss[0].s, A.ss[0].s, 3],
+    [`${n[0]}–${n[2]} slope at mean ${n[1]}`, A1.ss[1].s, A.ss[1].s, 3],
+    [`${n[0]}–${n[2]} slope at ${n[1]} = M + 1 SD`, A1.ss[2].s, A.ss[2].s, 3],
+    [`b<sub>3</sub> (product)`, A1.fullC.b[2], A.fullC.b[2], 5],
+    ['R²', A1.fullC.R2, A.fullC.R2, 3],
+    ['ΔR² for the product', A1.dR2, A.dR2, 3],
+    ['p for ΔR²', A1.pch, A.pch, -1],
+  ];
+  $('#tCmp').innerHTML=`<thead><tr><th>Quantity</th><th>Step 1: no interaction</th><th>Step 2: interaction</th></tr></thead><tbody>
+   ${rows.map(r=>r[0]==='grp'?`<tr class="grp"><td colspan="3">${r[1]}</td></tr>`:`<tr><td>${r[0]}</td><td>${r[3]<0?fp(r[1]):fs(r[1],r[3])}</td><td>${r[3]<0?fp(r[2]):fs(r[2],r[3])}</td></tr>`).join('')}
+  </tbody>`;
+  const cr=(a,b)=>`${fs(a,2)} in step 1 and ${fs(b,2)} in step 2`;
+  $('#cmpNotes').innerHTML=[
+    `<b>The correlation matrix changes little.</b> r(${n[0]}, ${n[2]}) is ${cr(A1.D4.r[0][2],A.D4.r[0][2])}, and r(${n[1]}, ${n[2]}) is ${cr(A1.D4.r[1][2],A.D4.r[1][2])}. In the population the interaction leaves all three correlations unchanged: when ${n[0]} and ${n[1]} are normally distributed, their centered product is uncorrelated with each of them. Any difference here comes from chance correlations between the product and the predictors in this sample (r(${n[0]}, centered product) = ${fs(A.rCen,2)}). A strong interaction can exist even when the correlation matrix gives no sign of it. (The SD of ${n[2]} is held at its setting, so the variance due to the interaction replaces error variance.)`,
+    `<b>The additive model changes little, too.</b> Its weight for ${n[0]} is ${cr(A1.add.b[0],A.add.b[0])}. In step 2 that weight is roughly the ${n[0]}–${n[2]} slope at the mean of ${n[1]}, but the actual slope runs from ${fs(A.ss[0].s,2)} at 1 SD below the mean of ${n[1]} to ${fs(A.ss[2].s,2)} at 1 SD above. The additive model reports one slope for everybody and cannot reveal that the slope varies.`,
+    `<b>Only the model with the product term sees the change.</b> Adding ${nx} raises R² by ${fs(A.dR2)} in step 2, compared with ${fs(A1.dR2)} in step 1.`,
+    `<b>The plane twists.</b> Every slice through the surface at a fixed value of ${n[1]} is still a straight line, but the slopes of those lines change steadily with ${n[1]}, so the lines fan out (and may cross) instead of running parallel. In the 3D plot, check “Additive model (step 1)” to see the flat plane the additive model fits to the same data.`,
+    `<b>The lower-order weights change meaning.</b> In step 1, the weight for ${n[0]} is the ${n[0]}–${n[2]} slope at every value of ${n[1]}. Once the product is in the model, the weight for ${n[0]} is the ${n[0]}–${n[2]} slope at one particular value of ${n[1]}: the mean, if the predictors are centered, or 0, if they are not.`
+  ].map(t=>`<li>${t}</li>`).join('');
+  // centering table
+  const C1=A.fullC, R1=A.fullR;
+  const cenRows=[
+    [`b for ${n[0]}`, C1.b[0], R1.b[0], 3, true],
+    [`SE`, C1.coef[1].se, R1.coef[1].se, 3, true],
+    [`VIF for ${n[0]}`, C1.vif[0], R1.vif[0], 2, true],
+    [`b for ${n[1]}`, C1.b[1], R1.b[1], 3, true],
+    [`VIF for ${n[1]}`, C1.vif[1], R1.vif[1], 2, true],
+    [`r(${n[0]}, product)`, A.rCen, A.rRaw, 3, true],
+    [`b<sub>3</sub> (product)`, C1.b[2], R1.b[2], 5, false],
+    [`SE of b<sub>3</sub>`, C1.coef[3].se, R1.coef[3].se, 5, false],
+    [`p for b<sub>3</sub>`, C1.coef[3].p, R1.coef[3].p, -1, false],
+    ['R²', C1.R2, R1.R2, 3, false],
+  ];
+  $('#tCen').innerHTML=`<thead><tr><th>Quantity</th><th>Centered</th><th>Uncentered</th></tr></thead><tbody>
+   ${cenRows.map(r=>`<tr><td>${r[0]}${r[4]?'':' <span style="color:var(--muted);font-size:12px">(same)</span>'}</td><td>${r[3]<0?fp(r[1]):f(r[1],r[3])}</td><td>${r[3]<0?fp(r[2]):f(r[2],r[3])}</td></tr>`).join('')}
+  </tbody>`;
+}
+
+function renderDesc(A){
+  const n=S.names.map(esc);
+  const st2=S.stage===2;
+  const names=[n[0],n[1],n[2], S.center?`${n[0]}<sub>c</sub>×${n[1]}<sub>c</sub>`:`${n[0]}×${n[1]}`];
+  const k=st2?4:3, D=A.D4;
+  $('#tD').innerHTML=`<thead><tr><th>Variable</th><th>Mean</th><th>SD</th>${names.slice(0,k).map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>
+   ${Array.from({length:k},(_,i)=>`<tr><td class="${cls[i]}">${names[i]}</td><td>${f(D.m[i],2)}</td><td>${f(D.sd[i],2)}</td>${Array.from({length:k},(_,j)=>`<td>${j<i?fs(D.r[i][j]):j===i?'—':''}</td>`).join('')}</tr>`).join('')}
+  </tbody>`;
+  $('#noteD').innerHTML= st2
+    ? `The last row is the product term as currently coded (${S.center?'centered':'uncentered'}). Toggle centering to see how strongly the uncentered product correlates with ${n[0]} and ${n[1]}.`
+    : `Correlations among the generated data.`;
+}
+
+/* ---------- plots ---------- */
+function cssv(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+function hex2rgb(h){ h=h.replace('#',''); if(h.length===3)h=h.split('').map(c=>c+c).join(''); return [0,2,4].map(i=>parseInt(h.slice(i,i+2),16)); }
+function mixHex(a,b,t){ const A=hex2rgb(a),B=hex2rgb(b); return 'rgb('+A.map((v,i)=>Math.round(v*(1-t)+B[i]*t)).join(',')+')'; }
+function shades(){ const c2=cssv('--x2'), bg=cssv('--bg'), ink=cssv('--ink'); return [mixHex(c2,bg,.5), mixHex(c2,bg,0), mixHex(c2,ink,.45)]; }
+const LVL=['M − 1 SD','M','M + 1 SD'];
+
+function renderPlot3(d,A){
+  const st2=S.stage===2;
+  const ink=cssv('--ink'), muted=cssv('--muted'), rule=cssv('--rule'), cy=cssv('--y'), c1=cssv('--x1'), c2=cssv('--x2'), panel=cssv('--panel');
+  const pred=st2?A.predFull:A.predAdd;
+  const X=Array.from(d.x1), W=Array.from(d.x2), Yv=Array.from(d.y);
+  const above=Yv.map((v,i)=>v>=pred(X[i],W[i]));
+  const traces=[{type:'scatter3d',mode:'markers',x:X,y:W,z:Yv,name:'Observations',
+    marker:{size:S.n>800?2.2:3.2,color:above.map(a=>a?cy:c2),opacity:0.8,line:{width:0}},
+    hovertemplate:`${esc(S.names[0])}: %{x:.2f}<br>${esc(S.names[1])}: %{y:.2f}<br>${esc(S.names[2])}: %{z:.2f}<extra></extra>`}];
+  const g=20, xs=[], ys=[];
+  for(let i=0;i<g;i++){ xs.push(A.mn1+(A.mx1-A.mn1)*i/(g-1)); ys.push(A.mn2+(A.mx2-A.mn2)*i/(g-1)); }
+  if(S.surf){
+    traces.push({type:'surface',x:xs,y:ys,z:ys.map(v=>xs.map(u=>pred(u,v))),showscale:false,opacity:0.4,colorscale:[[0,cy],[1,cy]],
+      hoverinfo:'skip',contours:{x:{show:true,color:panel,width:1},y:{show:true,color:panel,width:1}},lighting:{ambient:0.9,diffuse:0.2,specular:0.05}});
+  }
+  if(st2&&S.addPlane){
+    traces.push({type:'surface',x:xs,y:ys,z:ys.map(v=>xs.map(u=>A.predAdd(u,v))),showscale:false,opacity:0.28,colorscale:[[0,muted],[1,muted]],
+      hoverinfo:'skip',lighting:{ambient:1,diffuse:0}});
+  }
+  if(S.lines){
+    const sh=shades(), u=[A.mn1,A.mx1];
+    A.lv.forEach((w,i)=>{
+      traces.push({type:'scatter3d',mode:'lines',x:u,y:[w,w],z:u.map(v=>pred(v,w)),line:{color:sh[i],width:8},hoverinfo:'skip'});
+      if(st2&&S.addPlane) traces.push({type:'scatter3d',mode:'lines',x:u,y:[w,w],z:u.map(v=>A.predAdd(v,w)),line:{color:sh[i],width:4,dash:'dash'},hoverinfo:'skip'});
+    });
+  }
+  const ax=(t,c)=>({title:{text:esc(t),font:{color:c,size:14,family:'Public Sans, sans-serif'}},gridcolor:rule,zerolinecolor:rule,
+     color:muted,backgroundcolor:'rgba(0,0,0,0)',showbackground:false,tickfont:{size:11}});
+  const layout={uirevision:'keep',paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',showlegend:false,
+    margin:{l:0,r:0,t:0,b:0},font:{family:'Public Sans, sans-serif',color:ink},
+    scene:{xaxis:ax(S.names[0],c1),yaxis:ax(S.names[1],c2),zaxis:ax(S.names[2],cy),aspectmode:'cube',
+      camera:{projection:{type:S.ortho?'orthographic':'perspective'}}},
+    hoverlabel:{bgcolor:panel,bordercolor:rule,font:{color:ink}}};
+  if(!camInit){ layout.scene.camera.eye=CAMS.default.eye; layout.scene.camera.up=CAMS.default.up; camInit=true; }
+  Plotly.react('plot3',traces,layout,{displaylogo:false,responsive:true,modeBarButtonsToRemove:['toImage']});
+}
+
+function renderPlot2(d,A){
+  const st2=S.stage===2;
+  const ink=cssv('--ink'), muted=cssv('--muted'), rule=cssv('--rule'), c1=cssv('--x1'), cy=cssv('--y'), panel=cssv('--panel'), c2=cssv('--x2'), bg=cssv('--bg');
+  const sh=shades(), pred=st2?A.predFull:A.predAdd;
+  const traces=[{type:'scatter',mode:'markers',x:Array.from(d.x1),y:Array.from(d.y),customdata:Array.from(d.x2),showlegend:false,
+    marker:{size:S.n>800?4:6,color:Array.from(d.x2),cmin:A.mn2,cmax:A.mx2,colorscale:[[0,mixHex(c2,bg,.8)],[1,mixHex(c2,ink,.5)]],opacity:0.75,
+      colorbar:{title:{text:esc(S.names[1]),side:'right',font:{color:c2,size:12}},thickness:10,len:0.6,outlinewidth:0,tickfont:{size:10,color:muted},x:1.02}},
+    hovertemplate:`${esc(S.names[0])}: %{x:.2f}<br>${esc(S.names[2])}: %{y:.2f}<br>${esc(S.names[1])}: %{customdata:.2f}<extra></extra>`}];
+  const u=[A.mn1,A.mx1];
+  A.lv.forEach((w,i)=>{
+    traces.push({type:'scatter',mode:'lines',x:u,y:u.map(v=>pred(v,w)),line:{color:sh[i],width:3.5},
+      name:`${esc(S.names[1])} = ${LVL[i]} (${f(w,1)})`,hoverinfo:'skip'});
+  });
+  if(st2&&S.addPlane) A.lv.forEach((w,i)=>{
+    traces.push({type:'scatter',mode:'lines',x:u,y:u.map(v=>A.predAdd(v,w)),line:{color:sh[i],width:2,dash:'dash'},showlegend:false,hoverinfo:'skip'});
+  });
+  const layout={uirevision:'keep2',paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',
+    margin:{l:56,r:20,t:8,b:48},font:{family:'Public Sans, sans-serif',color:ink,size:12},
+    xaxis:{title:{text:esc(S.names[0]),font:{color:c1,size:14}},gridcolor:rule,zeroline:false,color:muted},
+    yaxis:{title:{text:esc(S.names[2]),font:{color:cy,size:14}},gridcolor:rule,zeroline:false,color:muted},
+    legend:{orientation:'h',x:0,y:1.0,yanchor:'bottom',font:{size:12}},
+    hoverlabel:{bgcolor:panel,bordercolor:rule,font:{color:ink}}};
+  Plotly.react('plot2',traces,layout,{displaylogo:false,responsive:true,modeBarButtonsToRemove:['toImage','lasso2d','select2d']});
+}
+
+function renderInt(A){
+  const ink=cssv('--ink'), muted=cssv('--muted'), rule=cssv('--rule'), c1=cssv('--x1'), cy=cssv('--y'), panel=cssv('--panel'), bg=cssv('--bg');
+  const F=A.fullC, m1=A.m[0], m2=A.m[1], s1=A.sd[0], tc=F.tc, sh=shades(), n=S.names.map(esc);
+  // predicted mean and its SE at (u, w); coding: [u−m1, w−m2, (u−m1)(w−m2)]
+  const at=(u,w)=>{
+    const x=[u-m1,w-m2,(u-m1)*(w-m2)];
+    let yhat=F.b0, v=F.var0;
+    for(let j=0;j<3;j++){ yhat+=F.b[j]*x[j]; v+=2*x[j]*F.cov0[j]; for(let k=0;k<3;k++) v+=x[j]*x[k]*F.cov[j][k]; }
+    return {yhat,se:Math.sqrt(Math.max(0,v))};
+  };
+  const g=41, us=Array.from({length:g},(_,i)=>m1-s1+2*s1*i/(g-1));
+  const traces=[];
+  A.lv.forEach((w,i)=>{
+    const P=us.map(u=>at(u,w));
+    traces.push({type:'scatter',mode:'lines',x:us,y:P.map(p=>p.yhat+tc*p.se),line:{width:0},hoverinfo:'skip',showlegend:false});
+    traces.push({type:'scatter',mode:'lines',x:us,y:P.map(p=>p.yhat-tc*p.se),line:{width:0},fill:'tonexty',fillcolor:sh[i].replace('rgb','rgba').replace(')',',0.18)'),hoverinfo:'skip',showlegend:false});
+  });
+  A.lv.forEach((w,i)=>{
+    const P=us.map(u=>at(u,w));
+    traces.push({type:'scatter',mode:'lines',x:us,y:P.map(p=>p.yhat),line:{color:sh[i],width:3.5},
+      name:`${n[1]} = ${LVL[i]} (${f(w,1)}): slope ${fs(A.ss[i].s)}`,
+      hovertemplate:`${n[1]} = ${f(w,2)}<br>${n[0]} = %{x:.2f}<br>predicted ${n[2]} = %{y:.2f}<extra></extra>`});
+  });
+  const tick=[m1-s1,m1,m1+s1];
+  const layout={uirevision:'int',paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',
+    margin:{l:60,r:16,t:8,b:50},font:{family:'Public Sans, sans-serif',color:ink,size:12},
+    xaxis:{title:{text:n[0],font:{color:c1,size:14}},gridcolor:rule,zeroline:false,color:muted,
+      tickvals:tick,ticktext:[`M − 1 SD (${f(tick[0],1)})`,`M (${f(tick[1],1)})`,`M + 1 SD (${f(tick[2],1)})`]},
+    yaxis:{title:{text:`Predicted ${n[2]}`,font:{color:cy,size:14}},gridcolor:rule,zeroline:false,color:muted},
+    legend:{orientation:'h',x:0,y:1.0,yanchor:'bottom',font:{size:12}},
+    hoverlabel:{bgcolor:panel,bordercolor:rule,font:{color:ink}}};
+  Plotly.react('plotInt',traces,layout,{displaylogo:false,responsive:true,modeBarButtonsToRemove:['toImage','lasso2d','select2d']});
+  // text
+  const ss=A.ss, b2=F.b[1], b3=F.b[2];
+  let t=`When ${n[1]} is low (1 SD below its mean), the ${n[0]}–${n[2]} slope is <b>${fs(ss[0].s)}</b> (p ${ss[0].p<.001?'< .001':'= '+fp(ss[0].p)}); at the mean of ${n[1]} it is <b>${fs(ss[1].s)}</b>; and when ${n[1]} is high (1 SD above), it is <b>${fs(ss[2].s)}</b> (p ${ss[2].p<.001?'< .001':'= '+fp(ss[2].p)}). `;
+  t += Math.abs(ss[2].s-ss[0].s)<1e-9 ? `The lines are parallel: there is no interaction in these data.`
+     : `The lines are not parallel: the ${n[0]}–${n[2]} relationship is ${Math.abs(ss[2].s)>Math.abs(ss[0].s)?'stronger':'weaker'} when ${n[1]} is high${(ss[0].s*ss[2].s<0)?', and it changes sign across this range of '+n[1]:''}.`;
+  if(Math.abs(b3)>1e-12){
+    const cross=m1-b2/b3;
+    const inData=cross>=A.mn1&&cross<=A.mx1;
+    t += ` Extended far enough, the lines would cross at ${n[0]} = ${f(cross,2)}, which is ${inData?`<b>inside</b> the range of the data (${f(A.mn1,1)} to ${f(A.mx1,1)}). This is a disordinal (crossover) interaction: which level of ${n[1]} predicts higher ${n[2]} depends on the value of ${n[0]}.`:`<b>outside</b> the range of the data (${f(A.mn1,1)} to ${f(A.mx1,1)}). This is an ordinal interaction: within the observed data, cases higher on ${n[1]} are predicted to be ${b2>=0?'higher':'lower'} on ${n[2]} at every value of ${n[0]}, by an amount that depends on ${n[0]}.`}`;
+  }
+  if(A.pch>=.05) t += ` Keep in mind that the interaction is not significant in this sample, so the differences among these slopes may reflect sampling error.`;
+  $('#intText').innerHTML=t;
+}
+
+function renderJN(A){
+  const ink=cssv('--ink'), muted=cssv('--muted'), rule=cssv('--rule'), c1=cssv('--x1'), c2=cssv('--x2'), cy=cssv('--y'), panel=cssv('--panel'), bg=cssv('--bg');
+  const pad=(A.mx2-A.mn2)*0.05, lo=A.mn2-pad, hi=A.mx2+pad, g=241;
+  const xs=[],sl=[],up=[],dn=[],sig=[];
+  for(let i=0;i<g;i++){ const w=lo+(hi-lo)*i/(g-1); const s=A.ssAt(w); xs.push(w); sl.push(s.s); up.push(s.hi); dn.push(s.lo); sig.push(A.jn.sigAt(w)); }
+  const shapes=[]; let st=null;
+  for(let i=0;i<g;i++){
+    if(sig[i]&&st===null) st=i;
+    if((!sig[i]||i===g-1)&&st!==null){ const e=sig[i]?i:i-1; shapes.push({type:'rect',xref:'x',yref:'paper',x0:xs[st],x1:xs[e],y0:0,y1:1,fillcolor:mixHex(cy,bg,.85),line:{width:0},layer:'below'}); st=null; }
+  }
+  shapes.push({type:'line',xref:'paper',x0:0,x1:1,y0:0,y1:0,line:{color:muted,width:1}});
+  if(A.jn.roots) A.jn.roots.forEach(r=>{ if(r>=lo&&r<=hi) shapes.push({type:'line',x0:r,x1:r,yref:'paper',y0:0,y1:1,line:{color:cy,width:1,dash:'dot'}}); });
+  const sh=shades();
+  const traces=[
+    {type:'scatter',mode:'lines',x:xs,y:up,line:{width:0},hoverinfo:'skip',showlegend:false},
+    {type:'scatter',mode:'lines',x:xs,y:dn,line:{width:0},fill:'tonexty',fillcolor:mixHex(c1,bg,.75),hoverinfo:'skip',name:'95% CI'},
+    {type:'scatter',mode:'lines',x:xs,y:sl,line:{color:c1,width:3},name:`${esc(S.names[0])}–${esc(S.names[2])} slope`,
+      hovertemplate:`${esc(S.names[1])} = %{x:.2f}<br>slope = %{y:.3f}<extra></extra>`},
+    {type:'scatter',mode:'markers',x:A.ss.map(s=>s.w),y:A.ss.map(s=>s.s),marker:{size:11,color:sh,line:{color:panel,width:2}},showlegend:false,
+      hovertemplate:`${esc(S.names[1])} = %{x:.2f}<br>slope = %{y:.3f}<extra></extra>`}
+  ];
+  const layout={uirevision:'jn',paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',shapes,
+    margin:{l:64,r:16,t:8,b:46},font:{family:'Public Sans, sans-serif',color:ink,size:12},
+    xaxis:{title:{text:esc(S.names[1]),font:{color:c2,size:14}},gridcolor:rule,zeroline:false,color:muted,range:[lo,hi]},
+    yaxis:{title:{text:`${esc(S.names[0])}–${esc(S.names[2])} slope`,font:{color:c1,size:13}},gridcolor:rule,zeroline:false,color:muted},
+    legend:{orientation:'h',x:0,y:1.0,yanchor:'bottom'},hoverlabel:{bgcolor:panel,bordercolor:rule,font:{color:ink}}};
+  Plotly.react('plotJN',traces,layout,{displaylogo:false,responsive:true,modeBarButtonsToRemove:['toImage','lasso2d','select2d']});
+}
+
+let camInit=false;
+const CAMS={
+  default:{eye:{x:1.55,y:-1.55,z:0.95},up:{x:0,y:0,z:1}},
+  x1:{eye:{x:0.001,y:-2.4,z:0.05},up:{x:0,y:0,z:1}},
+  x2:{eye:{x:2.4,y:0.001,z:0.05},up:{x:0,y:0,z:1}},
+  top:{eye:{x:0.001,y:0.001,z:2.6},up:{x:0,y:1,z:0}}
+};
+document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{
+  stopSpin(); const c=CAMS[b.dataset.view];
+  Plotly.relayout('plot3',{'scene.camera.eye':c.eye,'scene.camera.up':c.up,'scene.camera.center':{x:0,y:0,z:0}});
+}));
+let spinning=false, spinRaf=0, lastT=0;
+function stopSpin(){spinning=false;cancelAnimationFrame(spinRaf);$('#spin').setAttribute('aria-pressed','false');}
+$('#spin').addEventListener('click',()=>{
+  if(spinning){stopSpin();return;}
+  spinning=true; $('#spin').setAttribute('aria-pressed','true');
+  const gd=$('#plot3'); const e=(gd.layout.scene.camera&&gd.layout.scene.camera.eye)||CAMS.default.eye;
+  let ang=Math.atan2(e.y,e.x); const rad=Math.max(1.2,Math.hypot(e.x,e.y)); const ez=Math.abs(e.z)>2?0.9:e.z;
+  Plotly.relayout('plot3',{'scene.camera.up':{x:0,y:0,z:1}});
+  const step=t=>{ if(!spinning)return; if(t-lastT>33){ ang+=0.012; lastT=t;
+      Plotly.relayout('plot3',{'scene.camera.eye':{x:rad*Math.cos(ang),y:rad*Math.sin(ang),z:ez}}); }
+    spinRaf=requestAnimationFrame(step); };
+  spinRaf=requestAnimationFrame(step);
+});
+$('#plot3').addEventListener('mousedown',stopSpin);
+$('#plot3').addEventListener('touchstart',stopSpin,{passive:true});
+
+/* ---------- power ---------- */
+let powerRun=0;
+async function runPower(){
+  const id=++powerRun, reps=1000, n=S.n, btn=$('#powerBtn'), out=$('#powerOut');
+  btn.disabled=true; out.hidden=false; out.className='callout';
+  let hits=0, sumD=0;
+  for(let i=0;i<reps;i++){
+    if(id!==powerRun) return;
+    const d=generate({n,seed:500000+S.seed*7919+i*104729,exact:false,b3:S.b3,cache:false});
+    let m1=0,m2=0; for(let j=0;j<n;j++){m1+=d.x1[j];m2+=d.x2[j];} m1/=n; m2/=n;
+    const a=new Float64Array(n), b=new Float64Array(n), p=new Float64Array(n);
+    for(let j=0;j<n;j++){ a[j]=d.x1[j]-m1; b[j]=d.x2[j]-m2; p[j]=a[j]*b[j]; }
+    const R1=ols([a,b],d.y,true), R2=ols([a,b,p],d.y,true);
+    if(!R1||!R2) continue;
+    const dR=R2.R2-R1.R2, F=dR/((1-R2.R2)/(n-4));
+    sumD+=dR; if(pF(F,1,n-4)<.05) hits++;
+    if(i%25===24){ out.textContent=`Running… ${i+1} of ${reps} samples`; await new Promise(r=>setTimeout(r,0)); }
+  }
+  if(id!==powerRun) return;
+  const pw=hits/reps, n0=S.names.map(esc);
+  out.className='callout'+(pw<.8?' hi':'');
+  out.innerHTML=`In ${reps.toLocaleString()} random samples of n = ${n} from this population, the interaction was significant (p &lt; .05) in <b>${(pw*100).toFixed(1)}%</b> of them. The average sample ΔR² was ${fs(sumD/reps)}.${S.b3===0?' Because β<sub>3</sub> = 0, this is the Type I error rate and should be close to 5%.':pw<.8?' This is below the conventional target of 80%. Increase n to see how many cases the interaction requires.':''}`;
+  btn.disabled=false;
+  powerKey=JSON.stringify([S.r,S.b3,S.n]);
+}
+$('#powerBtn').addEventListener('click',runPower);
+
+/* ---------- wiring ---------- */
+buildVars(); buildCorrs();
+b3R.value=S.b3; b3N.value=S.b3.toFixed(2);
+const nR=$('#nR'), nN=$('#nN');
+nR.value=S.n; nN.value=S.n;
+nR.addEventListener('input',()=>{S.n=+nR.value;nN.value=S.n;update();});
+nN.addEventListener('change',()=>{let v=Math.round(+nN.value);if(!isFinite(v))return;v=Math.max(10,Math.min(5000,v));S.n=v;nN.value=v;nR.value=Math.min(2000,Math.max(20,v));update();});
+$('#exact').checked=S.exact;
+$('#exact').addEventListener('change',e=>{S.exact=e.target.checked;update();});
+$('#resample').addEventListener('click',()=>{S.seed++;update();});
+$('#center').addEventListener('change',e=>{S.center=e.target.checked;update();});
+$('#showSurf').addEventListener('change',e=>{S.surf=e.target.checked;update();});
+$('#showLines').addEventListener('change',e=>{S.lines=e.target.checked;update();});
+$('#showAdd').addEventListener('change',e=>{S.addPlane=e.target.checked;update();});
+$('#ortho').addEventListener('change',e=>{S.ortho=e.target.checked;update();});
+function setStage(k){
+  S.stage=k; document.body.dataset.stage=k;
+  $('#st1').setAttribute('aria-pressed',k===1); $('#st2').setAttribute('aria-pressed',k===2);
+  $('#stageIntro').textContent=INTRO[k];
+  update();
+  if(k===2){ try{ Plotly.Plots.resize('plotJN'); Plotly.Plots.resize('plotInt'); }catch(e){} }
+}
+$('#st1').addEventListener('click',()=>setStage(1));
+$('#st2').addEventListener('click',()=>setStage(2));
+try{ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>update()); }catch(e){}
+new MutationObserver(()=>update()).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+
+if(window.Plotly) setStage(1);
+else { $('#plot3').innerHTML='<p class="note" style="padding:20px">The plotting library could not load. Check your connection and reload the page.</p>'; }
+})();
+</script>
+</body>
+</html>
