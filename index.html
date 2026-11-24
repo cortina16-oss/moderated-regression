@@ -131,6 +131,7 @@ td.v1{color:var(--x1);font-weight:600} td.v2{color:var(--x2);font-weight:600} td
 .sig{color:var(--y);font-weight:600}
 .refs{font-size:13px;color:var(--muted);margin:0;padding-left:1.4em;text-indent:-1.4em;list-style:none}
 .refs li{margin-bottom:4px}
+code{font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--bg);border:1px solid var(--soft);border-radius:4px;padding:0 4px;color:var(--ink)}
 @media (prefers-reduced-motion: reduce){*{transition:none!important}}
 </style>
 </head>
@@ -253,6 +254,17 @@ td.v1{color:var(--x1);font-weight:600} td.v2{color:var(--x2);font-weight:600} td
       <p class="sectionlede">The model in Step 1 of this tool, which has no product term, is <i>additive</i>. Each predictor contributes its own weighted amount to the predicted value of <span class="nm2"></span>, and the contributions are simply added together, so the <span class="nm0"></span>–<span class="nm2"></span> slope is the same whatever the value of <span class="nm1"></span>. To test for an interaction, we introduce a product term, <span class="nm0"></span>×<span class="nm1"></span>, formed by multiplying the two predictors. The result is a <i>multiplicative</i> model: <i>Ŷ</i> = <i>b</i><sub>0</sub> + <i>b</i><sub>1</sub><span class="nm0"></span> + <i>b</i><sub>2</sub><span class="nm1"></span> + <i>b</i><sub>3</sub>(<span class="nm0"></span>×<span class="nm1"></span>). Because the predictors are multiplied, the contribution of <span class="nm0"></span> depends on the value of <span class="nm1"></span>, and vice versa. The model is still linear in its weights, so it is estimated by ordinary least squares like any other regression; “multiplicative” refers to the product of the predictors, not to the way the weights are estimated.</p>
       <p class="sectionlede" style="margin-top:8px">The additive and multiplicative components are often entered hierarchically in order to isolate the contribution of the product beyond that of its components. Here, <span class="nm0"></span> and <span class="nm1"></span> are entered in a first step, and the product term is entered in a second step. The interaction is tested by the increase in R² from the first step to the second (equivalently, by the t-test of the product's weight in the second-step model). If it is significant, probe it by computing the <span class="nm0"></span>–<span class="nm2"></span> slope at chosen values of <span class="nm1"></span>.</p>
       <div class="out" style="margin-top:12px">
+        <section class="panel wide">
+          <h2>Letting the software form the product</h2>
+          <p class="prose">You do not have to compute the product yourself. Most current software will form it for you if you enter the two predictors and specify that they interact, and the model it fits is exactly the same: the weights, their standard errors, and the test of <i>b</i><sub>3</sub> are identical to those from a hand-made product term.</p>
+          <dl class="defs" style="margin-top:4px">
+            <dt>R</dt><dd><code>lm(y ~ x1 * x2)</code> expands to <code>x1 + x2 + x1:x2</code>. <code>anova(lm(y ~ x1 + x2), lm(y ~ x1 * x2))</code> gives the hierarchical ΔR² test, and the <code>interactions</code> and <code>emmeans</code> packages give simple slopes, Johnson–Neyman intervals, and interaction plots.</dd>
+            <dt>Stata</dt><dd>Factor-variable notation, <code>regress y c.x1##c.x2</code>, does the same; <code>margins, dydx(x1) at(x2=(…))</code> gives simple slopes.</dd>
+            <dt>SPSS</dt><dd>The REGRESSION procedure cannot form products, so the product must be computed first. GLM (UNIANOVA) can: enter <span class="nm0"></span> and <span class="nm1"></span> as covariates and include <span class="nm0"></span>*<span class="nm1"></span> in the design. Hayes’s PROCESS macro (Model 1) also forms the product and adds probing and the Johnson–Neyman technique.</dd>
+            <dt>SAS</dt><dd><code>PROC GLM</code> with <code>model y = x1 x2 x1*x2;</code> forms the product; <code>PROC REG</code> requires it to be created beforehand.</dd>
+          </dl>
+          <p class="prose" style="margin-top:10px">Two cautions. First, these options multiply the variables exactly as you supply them. Apart from PROCESS, which offers centering as an option, they do not center, so center <span class="nm0"></span> and <span class="nm1"></span> first if you want <i>b</i><sub>1</sub> and <i>b</i><sub>2</sub> to be slopes at the mean of the other predictor. Second, letting the software form the product helps with standardized coefficients: if you standardize <span class="nm0"></span>, <span class="nm1"></span> and <span class="nm2"></span> first and then specify the interaction, the software multiplies the z-scores, which is the correct standardized solution. The error arises when a product you formed yourself is standardized as if it were just another predictor.</p>
+        </section>
         <section class="panel wide">
           <h2>A note on centering</h2>
           <p class="prose"><b>It is recommended that predictors be centered prior to forming products.</b> Read on to learn how and why to do this.</p>
