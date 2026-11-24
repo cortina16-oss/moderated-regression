@@ -314,13 +314,6 @@ code{font:13px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;backgrou
           <p class="prose" id="jnText" style="margin-top:8px"></p>
           <p class="note">Rather than picking a few values of <span class="nm1"></span>, the Johnson–Neyman technique (Johnson &amp; Neyman, 1936; Bauer &amp; Curran, 2005) finds the values at which the slope's 95% confidence interval just touches zero. The shaded regions are where the <span class="nm0"></span>–<span class="nm2"></span> slope differs significantly from zero. The dots mark the three values used in the simple-slopes table.</p>
         </section>
-        <section class="panel wide">
-          <h2>What the interaction changes, and what it leaves unchanged</h2>
-          <p class="prose">This comparison isolates the effect of an interaction. Both columns are computed from the same values of <span class="nm0"></span> and <span class="nm1"></span> and the same pattern of random error. The only difference is that in step 2, <span class="nm2"></span> also contains an interaction component (β<sub>3</sub> = <span id="cmpB3"></span>), with the error variance reduced so that the SD of <span class="nm2"></span> stays at its setting. Comparing the columns shows where an interaction does and does not leave a trace.</p>
-          <p class="note" id="cmpExact" style="margin-top:0"></p>
-          <div class="tbl"><table id="tCmp"></table></div>
-          <ul class="notice" id="cmpNotes"></ul>
-        </section>
         <section class="panel">
           <h2>Centering</h2>
           <div class="tbl"><table id="tCen"></table></div>
@@ -700,9 +693,8 @@ function update(){
   const st2=S.stage===2;
   const d=generate({n:S.n,seed:S.seed,exact:S.exact,b3:st2?S.b3:0,cache:true});
   const A=analyze(d);
-  let A1=null; if(st2) A1=analyze(generate({n:S.n,seed:S.seed,exact:S.exact,b3:0,cache:true}));
   renderEq(A);
-  if(st2) renderStep2(A,A1); else renderStep1(A);
+  if(st2) renderStep2(A); else renderStep1(A);
   renderDesc(A);
   renderPlot3(d,A); renderPlot2(d,A); if(st2){ renderInt(A); renderJN(A); }
   $('#sampleHint').textContent = S.exact
@@ -770,7 +762,7 @@ function renderStep1(A){
   </tbody>`;
 }
 
-function renderStep2(A,A1){
+function renderStep2(A){
   const n=S.names.map(esc), nx=`${n[0]}×${n[1]}`;
   const ad=A.add, fc=A.fullC, F=S.center?A.fullC:A.fullR, c=F.coef;
   // hierarchical
@@ -811,40 +803,6 @@ function renderStep2(A,A1){
   txt += ` Observed values of ${n[1]} run from ${f(A.mn2,2)} to ${f(A.mx2,2)}; ${Math.round(J.share*100)}% of the sample falls in the region of significance.`;
   if(R && (!inR(R[0])||!inR(R[1]))) txt += ` A boundary outside the observed range is an extrapolation and should not be interpreted.`;
   $('#jnText').innerHTML=txt;
-  // comparison
-  $('#cmpB3').textContent=fs(S.b3,2);
-  const rows=[
-    ['grp','Correlations (not changed by the interaction)'],
-    [`r(${n[0]}, ${n[2]})`, A1.D4.r[0][2], A.D4.r[0][2], 3],
-    [`r(${n[1]}, ${n[2]})`, A1.D4.r[1][2], A.D4.r[1][2], 3],
-    [`r(${n[0]}, ${n[1]})`, A1.D4.r[0][1], A.D4.r[0][1], 3],
-    ['grp','Additive model, without the product term (not changed by the interaction)'],
-    [`b for ${n[0]}`, A1.add.b[0], A.add.b[0], 3],
-    [`b for ${n[1]}`, A1.add.b[1], A.add.b[1], 3],
-    ['R²', A1.add.R2, A.add.R2, 3],
-    ['grp','Model with the product term (changed by the interaction)'],
-    [`${n[0]}–${n[2]} slope at ${n[1]} = M − 1 SD`, A1.ss[0].s, A.ss[0].s, 3],
-    [`${n[0]}–${n[2]} slope at mean ${n[1]}`, A1.ss[1].s, A.ss[1].s, 3],
-    [`${n[0]}–${n[2]} slope at ${n[1]} = M + 1 SD`, A1.ss[2].s, A.ss[2].s, 3],
-    [`b<sub>3</sub> (product)`, A1.fullC.b[2], A.fullC.b[2], 5],
-    ['R²', A1.fullC.R2, A.fullC.R2, 3],
-    ['ΔR² for the product', A1.dR2, A.dR2, 3],
-    ['p for ΔR²', A1.pch, A.pch, -1],
-  ];
-  $('#tCmp').innerHTML=`<thead><tr><th>Quantity</th><th>Step 1: no interaction</th><th>Step 2: interaction</th></tr></thead><tbody>
-   ${rows.map(r=>r[0]==='grp'?`<tr class="grp"><td colspan="3">${r[1]}</td></tr>`:`<tr><td>${r[0]}</td><td>${r[3]<0?fp(r[1]):fs(r[1],r[3])}</td><td>${r[3]<0?fp(r[2]):fs(r[2],r[3])}</td></tr>`).join('')}
-  </tbody>`;
-  const cr=(a,b)=>`${fs(a,2)} in step 1 and ${fs(b,2)} in step 2`;
-  $('#cmpExact').innerHTML = S.exact
-    ? `“Sample matches settings exactly” is checked, so the correlations and the additive model are identical in the two columns.`
-    : `“Sample matches settings exactly” is unchecked, so the correlations and the additive model differ slightly between the columns. That is sampling error: in any particular sample the product is correlated with ${n[0]} and ${n[1]} by chance. Check the box to remove it.`;
-  $('#cmpNotes').innerHTML=[
-    `<b>The correlations do not change.</b> When ${n[0]} and ${n[1]} are jointly normal, as they are in this simulation, their centered product is uncorrelated with each of them. Adding an interaction component to ${n[2]} therefore leaves r(${n[0]}, ${n[2]}), r(${n[1]}, ${n[2]}) and r(${n[0]}, ${n[1]}) as they were. An interaction can be strong even though nothing in the correlation matrix hints at it.`,
-    `<b>The additive model does not change.</b> Its weights and R² are functions of those three correlations (and the SDs), so they are the same in both columns. In step 2, its weight for ${n[0]} matches the ${n[0]}–${n[2]} slope at the mean of ${n[1]}, but the slope actually runs from ${fs(A.ss[0].s,2)} at 1 SD below the mean of ${n[1]} to ${fs(A.ss[2].s,2)} at 1 SD above. The additive model reports a single slope and cannot reveal that it varies.`,
-    `<b>Only the model with the product term detects the interaction.</b> Adding ${nx} raises R² by ${fs(A.dR2)} in step 2, compared with ${fs(A1.dR2)} in step 1, and the ${n[0]}–${n[2]} slopes at different values of ${n[1]} are no longer equal.`,
-    `<b>The plane twists.</b> Every slice through the surface at a fixed value of ${n[1]} is still a straight line, but the slopes of those lines change steadily with ${n[1]}, so the lines fan out (and may cross) instead of running parallel. In the 3D plot, check “Additive model (step 1)” to see the flat plane the additive model fits to the same data.`,
-    `<b>The lower-order weights change meaning.</b> In the additive model, the weight for ${n[0]} is the ${n[0]}–${n[2]} slope at every value of ${n[1]}. Once the product is in the model, the weight for ${n[0]} is the ${n[0]}–${n[2]} slope at one particular value of ${n[1]}: the mean, if the predictors are centered, or 0, if they are not.`
-  ].map(t=>`<li>${t}</li>`).join('');
   // centering table
   const C1=A.fullC, R1=A.fullR;
   const cenRows=[
